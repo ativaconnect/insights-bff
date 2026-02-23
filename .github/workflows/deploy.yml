@@ -96,6 +96,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          value="${{ secrets.JWT_SECRET }}"
+          if [ -n "${value}" ]; then
+            echo "JWT_SECRET=${value}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
           case "${{ inputs.stage }}" in
             pet)
               value="${{ secrets.JWT_SECRET_PET }}"
@@ -123,6 +129,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          value="${{ secrets.APP_CLIENT_TOKEN }}"
+          previous="${{ secrets.APP_CLIENT_TOKEN_PREVIOUS }}"
+          if [ -n "${value}" ]; then
+            echo "APP_CLIENT_TOKEN=${value}" >> "$GITHUB_ENV"
+            if [ -n "${previous}" ]; then
+              echo "APP_CLIENT_TOKEN_PREVIOUS=${previous}" >> "$GITHUB_ENV"
+            fi
+            exit 0
+          fi
+
           case "${{ inputs.stage }}" in
             pet)
               value="${{ secrets.APP_CLIENT_TOKEN_PET }}"
