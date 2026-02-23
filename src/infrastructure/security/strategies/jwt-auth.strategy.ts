@@ -15,14 +15,7 @@ export class JwtAuthStrategy implements AuthStrategy {
 
   authenticate(event: APIGatewayProxyEventV2): AuthContext | null {
     const header = event.headers.authorization ?? event.headers.Authorization;
-    const tokenFromHeader = header && header.startsWith('Bearer ')
-      ? header.replace('Bearer ', '').trim()
-      : null;
-    const tokenFromQuery =
-      event.queryStringParameters?.['token'] ??
-      event.queryStringParameters?.['access_token'] ??
-      null;
-    const token = tokenFromHeader ?? tokenFromQuery;
+    const token = header && header.startsWith('Bearer ') ? header.replace('Bearer ', '').trim() : null;
     if (!token) {
       return null;
     }

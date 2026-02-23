@@ -10,8 +10,7 @@ export const handler: APIGatewayProxyHandlerV2 = async () => {
     {
       service: 'insights-backend',
       status: healthy ? 'UP' : 'DEGRADED',
-      stage: process.env.APP_STAGE ?? 'unknown',
-      dynamo
+      timestamp: new Date().toISOString()
     },
     healthy ? 200 : 503
   );

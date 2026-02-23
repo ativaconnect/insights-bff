@@ -3,6 +3,7 @@ import type { APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import { container } from '../../../infrastructure/di/container';
 import type { UserRole } from '../../../core/domain/value-objects/user-role';
 import { fail } from '../response';
+import { authorizeAppToken } from './app-token.middleware';
 
 export interface AuthenticatedRequest {
   subject: string;
@@ -18,6 +19,11 @@ export const isAuthorizationError = (
 ): value is APIGatewayProxyStructuredResultV2 => 'statusCode' in value;
 
 export const authorize = (event: APIGatewayProxyEventV2, expectedRole: UserRole | UserRole[]): AuthorizationResult => {
+  const appAuthError = authorizeAppToken(event);
+  if (appAuthError) {
+    return appAuthError;
+  }
+
   const authContext = container.security.authenticator.authenticate(event);
 
   if (!authContext) {

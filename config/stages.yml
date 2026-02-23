@@ -1,5 +1,7 @@
 local:
   region: us-east-1
+  corsAllowedOrigin: http://localhost:4200
+  apiDomain: localhost:3001
   tableName: insights-local
   customersTableName: insights-customers-local
   plansTableName: insights-plans-local
@@ -8,9 +10,21 @@ local:
   surveysTableName: insights-surveys-local
   dynamoEndpoint: http://localhost:8000
   jwtSecret: local-dev-secret
+  appClientToken: local-app-client-token
+  appClientTokenPrevious: ''
+  loginWindowSeconds: 900
+  loginLockSeconds: 900
+  loginMaxAttemptsPerLogin: 10
+  loginMaxAttemptsPerIp: 40
+  loginGuardTtlSeconds: 86400
+  captchaEnabled: false
+  captchaSecret: ''
+  captchaVerifyUrl: https://hcaptcha.com/siteverify
 
 dev:
   region: us-east-1
+  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_DEV, 'https://insigths-dev.ativaconnect.com.br'}
+  apiDomain: ${env:API_DOMAIN_DEV, 'insigths.bff-dev.ativaconnect.com.br'}
   tableName: insights-dev
   customersTableName: insights-customers-dev
   plansTableName: insights-plans-dev
@@ -19,9 +33,21 @@ dev:
   surveysTableName: insights-surveys-dev
   dynamoEndpoint: ''
   jwtSecret: ${env:JWT_SECRET, 'replace-in-dev'}
+  appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-dev'}
+  appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  loginWindowSeconds: ${env:LOGIN_WINDOW_SECONDS_DEV, 900}
+  loginLockSeconds: ${env:LOGIN_LOCK_SECONDS_DEV, 900}
+  loginMaxAttemptsPerLogin: ${env:LOGIN_MAX_ATTEMPTS_PER_LOGIN_DEV, 5}
+  loginMaxAttemptsPerIp: ${env:LOGIN_MAX_ATTEMPTS_PER_IP_DEV, 20}
+  loginGuardTtlSeconds: ${env:LOGIN_GUARD_TTL_SECONDS_DEV, 86400}
+  captchaEnabled: ${env:CAPTCHA_ENABLED_DEV, false}
+  captchaSecret: ${env:CAPTCHA_SECRET_DEV, ''}
+  captchaVerifyUrl: ${env:CAPTCHA_VERIFY_URL_DEV, 'https://hcaptcha.com/siteverify'}
 
 pet:
   region: us-east-1
+  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PET, 'https://insigths-pet.ativaconnect.com.br'}
+  apiDomain: ${env:API_DOMAIN_PET, 'insigths.bff-pet.ativaconnect.com.br'}
   tableName: insights-pet
   customersTableName: insights-customers-pet
   plansTableName: insights-plans-pet
@@ -30,9 +56,21 @@ pet:
   surveysTableName: insights-surveys-pet
   dynamoEndpoint: ''
   jwtSecret: ${env:JWT_SECRET, 'replace-in-pet'}
+  appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-pet'}
+  appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  loginWindowSeconds: ${env:LOGIN_WINDOW_SECONDS_PET, 900}
+  loginLockSeconds: ${env:LOGIN_LOCK_SECONDS_PET, 900}
+  loginMaxAttemptsPerLogin: ${env:LOGIN_MAX_ATTEMPTS_PER_LOGIN_PET, 5}
+  loginMaxAttemptsPerIp: ${env:LOGIN_MAX_ATTEMPTS_PER_IP_PET, 20}
+  loginGuardTtlSeconds: ${env:LOGIN_GUARD_TTL_SECONDS_PET, 86400}
+  captchaEnabled: ${env:CAPTCHA_ENABLED_PET, false}
+  captchaSecret: ${env:CAPTCHA_SECRET_PET, ''}
+  captchaVerifyUrl: ${env:CAPTCHA_VERIFY_URL_PET, 'https://hcaptcha.com/siteverify'}
 
 prd:
   region: us-east-1
+  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PRD, 'https://insigths.ativaconnect.com.br'}
+  apiDomain: ${env:API_DOMAIN_PRD, 'insigths.bff.ativaconnect.com.br'}
   tableName: insights-prd
   customersTableName: insights-customers-prd
   plansTableName: insights-plans-prd
@@ -41,3 +79,13 @@ prd:
   surveysTableName: insights-surveys-prd
   dynamoEndpoint: ''
   jwtSecret: ${env:JWT_SECRET, 'replace-in-prd'}
+  appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-prd'}
+  appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  loginWindowSeconds: ${env:LOGIN_WINDOW_SECONDS_PRD, 900}
+  loginLockSeconds: ${env:LOGIN_LOCK_SECONDS_PRD, 900}
+  loginMaxAttemptsPerLogin: ${env:LOGIN_MAX_ATTEMPTS_PER_LOGIN_PRD, 5}
+  loginMaxAttemptsPerIp: ${env:LOGIN_MAX_ATTEMPTS_PER_IP_PRD, 20}
+  loginGuardTtlSeconds: ${env:LOGIN_GUARD_TTL_SECONDS_PRD, 86400}
+  captchaEnabled: ${env:CAPTCHA_ENABLED_PRD, false}
+  captchaSecret: ${env:CAPTCHA_SECRET_PRD, ''}
+  captchaVerifyUrl: ${env:CAPTCHA_VERIFY_URL_PRD, 'https://hcaptcha.com/siteverify'}

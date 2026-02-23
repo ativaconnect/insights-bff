@@ -1,9 +1,10 @@
 import { Authenticator } from '../security/authenticator';
 import { JwtAuthStrategy } from '../security/strategies/jwt-auth.strategy';
-import { ApiKeyAuthStrategy } from '../security/strategies/api-key-auth.strategy';
+import { assertConfiguredSecret } from '../security/security-config';
 
-const jwtSecret = process.env.JWT_SECRET ?? 'local-dev-secret';
-const authenticator = new Authenticator([new JwtAuthStrategy(jwtSecret), new ApiKeyAuthStrategy()]);
+const jwtSecret = assertConfiguredSecret('JWT_SECRET', process.env.JWT_SECRET, process.env.APP_STAGE);
+
+const authenticator = new Authenticator([new JwtAuthStrategy(jwtSecret)]);
 
 export const container = {
   security: {

@@ -24,21 +24,20 @@ provider:
   httpApi:
     cors:
       allowedOrigins:
-        - '*'
+        - ${self:custom.stageConfig.corsAllowedOrigin}
       allowedHeaders:
-        - '*'
         - Authorization
         - authorization
         - Content-Type
         - content-type
+        - X-App-Token
+        - x-app-token
         - X-Amz-Date
         - x-amz-date
         - X-Amz-Security-Token
         - x-amz-security-token
         - X-Amz-User-Agent
         - x-amz-user-agent
-        - X-Api-Key
-        - x-api-key
         - ngrok-skip-browser-warning
       allowedMethods:
         - GET
@@ -84,6 +83,16 @@ provider:
     DYNAMODB_FINANCE_TABLE_NAME: ${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
     DYNAMODB_SURVEYS_TABLE_NAME: ${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
     DYNAMODB_ENDPOINT: ${self:custom.stageConfig.dynamoEndpoint}
+    APP_CLIENT_TOKEN: ${self:custom.stageConfig.appClientToken}
+    APP_CLIENT_TOKEN_PREVIOUS: ${self:custom.stageConfig.appClientTokenPrevious, ''}
+    LOGIN_WINDOW_SECONDS: ${self:custom.stageConfig.loginWindowSeconds, 900}
+    LOGIN_LOCK_SECONDS: ${self:custom.stageConfig.loginLockSeconds, 900}
+    LOGIN_MAX_ATTEMPTS_PER_LOGIN: ${self:custom.stageConfig.loginMaxAttemptsPerLogin, 5}
+    LOGIN_MAX_ATTEMPTS_PER_IP: ${self:custom.stageConfig.loginMaxAttemptsPerIp, 20}
+    LOGIN_GUARD_TTL_SECONDS: ${self:custom.stageConfig.loginGuardTtlSeconds, 86400}
+    CAPTCHA_ENABLED: ${self:custom.stageConfig.captchaEnabled, 'false'}
+    CAPTCHA_SECRET: ${self:custom.stageConfig.captchaSecret, ''}
+    CAPTCHA_VERIFY_URL: ${self:custom.stageConfig.captchaVerifyUrl, 'https://hcaptcha.com/siteverify'}
 
 custom:
   awsTags:

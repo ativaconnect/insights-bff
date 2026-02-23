@@ -39,6 +39,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
+    if (auth.role === 'ROLE_INTERVIEWER') {
+      const interviewerId = auth.interviewerId ?? auth.subject;
+      const allowed = await repository.listAvailableForInterviewer(auth.tenantId, interviewerId);
+      if (!allowed.some((survey) => survey.id === surveyId)) {
+        return fail(403, 'Entrevistador nao vinculado ou sem cota para esta pesquisa.');
+      }
+    }
+
     const body = parseBody<SubmitResponseBatchRequest>(event);
     if (!Array.isArray(body.responses) || body.responses.length === 0) {
       return fail(400, 'responses obrigatorio.');
