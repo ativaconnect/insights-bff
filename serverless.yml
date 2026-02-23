@@ -1,0 +1,657 @@
+service: insights-backend
+frameworkVersion: '3'
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'local'}
+  region: ${self:custom.stageConfig.region}
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - '*'
+        - Authorization
+        - authorization
+        - Content-Type
+        - content-type
+        - X-Amz-Date
+        - x-amz-date
+        - X-Amz-Security-Token
+        - x-amz-security-token
+        - X-Amz-User-Agent
+        - x-amz-user-agent
+        - X-Api-Key
+        - x-api-key
+        - ngrok-skip-browser-warning
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowCredentials: false
+      maxAge: 86400
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:TransactWriteItems
+            - dynamodb:DescribeTable
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.tableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.tableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}/index/*
+  environment:
+    APP_STAGE: ${sls:stage}
+    JWT_SECRET: ${self:custom.stageConfig.jwtSecret}
+    DYNAMODB_TABLE_NAME: ${self:custom.stageConfig.tableName}
+    DYNAMODB_CUSTOMERS_TABLE_NAME: ${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}
+    DYNAMODB_PLANS_TABLE_NAME: ${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}
+    DYNAMODB_BILLING_TABLE_NAME: ${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}
+    DYNAMODB_FINANCE_TABLE_NAME: ${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
+    DYNAMODB_SURVEYS_TABLE_NAME: ${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
+    DYNAMODB_ENDPOINT: ${self:custom.stageConfig.dynamoEndpoint}
+
+custom:
+  stageConfig: ${file(./config/stages.yml):${sls:stage}}
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    target: node20
+    platform: node
+    format: cjs
+    concurrency: 10
+  serverless-offline:
+    httpPort: 3001
+
+functions:
+  register:
+    handler: src/interfaces/http/handlers/auth/register.handler
+    events:
+      - httpApi:
+          path: /auth/register
+          method: post
+  login:
+    handler: src/interfaces/http/handlers/auth/login.handler
+    events:
+      - httpApi:
+          path: /auth/login
+          method: post
+  getMe:
+    handler: src/interfaces/http/handlers/customer/get-me.handler
+    events:
+      - httpApi:
+          path: /me
+          method: get
+  updateMe:
+    handler: src/interfaces/http/handlers/customer/update-me.handler
+    events:
+      - httpApi:
+          path: /me
+          method: put
+  purchaseMyCredits:
+    handler: src/interfaces/http/handlers/customer/subscription/purchase-credits.handler
+    events:
+      - httpApi:
+          path: /me/credits/purchase
+          method: post
+  requestMyCreditsPurchase:
+    handler: src/interfaces/http/handlers/customer/subscription/request-credit-purchase.handler
+    events:
+      - httpApi:
+          path: /me/credits/requests
+          method: post
+  listMyCreditsPurchaseRequests:
+    handler: src/interfaces/http/handlers/customer/subscription/list-credit-purchase-requests.handler
+    events:
+      - httpApi:
+          path: /me/credits/requests
+          method: get
+  listInterviewers:
+    handler: src/interfaces/http/handlers/customer/interviewers/list-interviewers.handler
+    events:
+      - httpApi:
+          path: /interviewers
+          method: get
+  createInterviewer:
+    handler: src/interfaces/http/handlers/customer/interviewers/create-interviewer.handler
+    events:
+      - httpApi:
+          path: /interviewers
+          method: post
+  updateInterviewer:
+    handler: src/interfaces/http/handlers/customer/interviewers/update-interviewer.handler
+    events:
+      - httpApi:
+          path: /interviewers/{interviewerId}
+          method: put
+  setInterviewerStatus:
+    handler: src/interfaces/http/handlers/customer/interviewers/set-interviewer-status.handler
+    events:
+      - httpApi:
+          path: /interviewers/{interviewerId}/status
+          method: put
+  deleteInterviewer:
+    handler: src/interfaces/http/handlers/customer/interviewers/delete-interviewer.handler
+    events:
+      - httpApi:
+          path: /interviewers/{interviewerId}
+          method: delete
+  listSurveys:
+    handler: src/interfaces/http/handlers/customer/surveys/list-surveys.handler
+    events:
+      - httpApi:
+          path: /surveys
+          method: get
+  createSurvey:
+    handler: src/interfaces/http/handlers/customer/surveys/create-survey.handler
+    events:
+      - httpApi:
+          path: /surveys
+          method: post
+  getSurvey:
+    handler: src/interfaces/http/handlers/customer/surveys/get-survey.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}
+          method: get
+  updateSurvey:
+    handler: src/interfaces/http/handlers/customer/surveys/update-survey.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}
+          method: put
+  listSurveyResponses:
+    handler: src/interfaces/http/handlers/customer/surveys/list-responses.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}/responses
+          method: get
+  getSurveyHeatmap:
+    handler: src/interfaces/http/handlers/customer/surveys/get-heatmap.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}/heatmap
+          method: get
+  submitSurveyResponse:
+    handler: src/interfaces/http/handlers/customer/surveys/submit-response.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}/responses
+          method: post
+  submitSurveyResponsesBatch:
+    handler: src/interfaces/http/handlers/customer/surveys/submit-responses-batch.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}/responses/batch
+          method: post
+  listAvailableInterviewerSurveys:
+    handler: src/interfaces/http/handlers/interviewer/surveys/list-available-surveys.handler
+    events:
+      - httpApi:
+          path: /interviewer/surveys
+          method: get
+  listAdminCustomers:
+    handler: src/interfaces/http/handlers/admin/customers/list-customers.handler
+    events:
+      - httpApi:
+          path: /admin/customers
+          method: get
+  purchaseCustomerCredits:
+    handler: src/interfaces/http/handlers/admin/customers/purchase-customer-credits.handler
+    events:
+      - httpApi:
+          path: /admin/customers/{tenantId}/credits/purchase
+          method: post
+  listAdminCreditRequests:
+    handler: src/interfaces/http/handlers/admin/credits/list-credit-purchase-requests.handler
+    events:
+      - httpApi:
+          path: /admin/credits/requests
+          method: get
+  approveAdminCreditRequest:
+    handler: src/interfaces/http/handlers/admin/credits/approve-credit-purchase-request.handler
+    events:
+      - httpApi:
+          path: /admin/credits/requests/{requestId}/approve
+          method: post
+  rejectAdminCreditRequest:
+    handler: src/interfaces/http/handlers/admin/credits/reject-credit-purchase-request.handler
+    events:
+      - httpApi:
+          path: /admin/credits/requests/{requestId}/reject
+          method: post
+  getAdminBillingCreditSales:
+    handler: src/interfaces/http/handlers/admin/billing/get-credit-sales-report.handler
+    events:
+      - httpApi:
+          path: /admin/billing/credit-sales
+          method: get
+  listFinanceSuppliers:
+    handler: src/interfaces/http/handlers/admin/finance/suppliers/list-suppliers.handler
+    events:
+      - httpApi:
+          path: /admin/finance/suppliers
+          method: get
+  createFinanceSupplier:
+    handler: src/interfaces/http/handlers/admin/finance/suppliers/create-supplier.handler
+    events:
+      - httpApi:
+          path: /admin/finance/suppliers
+          method: post
+  updateFinanceSupplier:
+    handler: src/interfaces/http/handlers/admin/finance/suppliers/update-supplier.handler
+    events:
+      - httpApi:
+          path: /admin/finance/suppliers/{supplierId}
+          method: put
+  listFinanceExpenses:
+    handler: src/interfaces/http/handlers/admin/finance/expenses/list-expenses.handler
+    events:
+      - httpApi:
+          path: /admin/finance/expenses
+          method: get
+  createFinanceExpense:
+    handler: src/interfaces/http/handlers/admin/finance/expenses/create-expense.handler
+    events:
+      - httpApi:
+          path: /admin/finance/expenses
+          method: post
+  updateFinanceExpense:
+    handler: src/interfaces/http/handlers/admin/finance/expenses/update-expense.handler
+    events:
+      - httpApi:
+          path: /admin/finance/expenses/{expenseId}
+          method: put
+  getFinanceForecast:
+    handler: src/interfaces/http/handlers/admin/finance/forecast/get-forecast.handler
+    events:
+      - httpApi:
+          path: /admin/finance/forecast/{month}
+          method: get
+  upsertFinanceForecast:
+    handler: src/interfaces/http/handlers/admin/finance/forecast/upsert-forecast.handler
+    events:
+      - httpApi:
+          path: /admin/finance/forecast/{month}
+          method: put
+  getFinanceOverview:
+    handler: src/interfaces/http/handlers/admin/finance/overview/get-overview.handler
+    events:
+      - httpApi:
+          path: /admin/finance/overview
+          method: get
+  listFinanceRecurringTemplates:
+    handler: src/interfaces/http/handlers/admin/finance/recurring/list-templates.handler
+    events:
+      - httpApi:
+          path: /admin/finance/recurring/templates
+          method: get
+  createFinanceRecurringTemplate:
+    handler: src/interfaces/http/handlers/admin/finance/recurring/create-template.handler
+    events:
+      - httpApi:
+          path: /admin/finance/recurring/templates
+          method: post
+  updateFinanceRecurringTemplate:
+    handler: src/interfaces/http/handlers/admin/finance/recurring/update-template.handler
+    events:
+      - httpApi:
+          path: /admin/finance/recurring/templates/{templateId}
+          method: put
+  generateFinanceRecurringMonth:
+    handler: src/interfaces/http/handlers/admin/finance/recurring/generate-month.handler
+    events:
+      - httpApi:
+          path: /admin/finance/recurring/generate
+          method: post
+  listFinancePendingUpdates:
+    handler: src/interfaces/http/handlers/admin/finance/recurring/list-pending-updates.handler
+    events:
+      - httpApi:
+          path: /admin/finance/recurring/pending-updates
+          method: get
+  generateFinanceInstallments:
+    handler: src/interfaces/http/handlers/admin/finance/installments/generate-installments.handler
+    events:
+      - httpApi:
+          path: /admin/finance/installments/generate
+          method: post
+  listPlanDefinitions:
+    handler: src/interfaces/http/handlers/admin/plans/list-plan-definitions.handler
+    events:
+      - httpApi:
+          path: /admin/plans
+          method: get
+  createPlanDefinition:
+    handler: src/interfaces/http/handlers/admin/plans/create-plan-definition.handler
+    events:
+      - httpApi:
+          path: /admin/plans
+          method: post
+  updatePlanDefinition:
+    handler: src/interfaces/http/handlers/admin/plans/update-plan-definition.handler
+    events:
+      - httpApi:
+          path: /admin/plans/{planId}
+          method: put
+  deletePlanDefinition:
+    handler: src/interfaces/http/handlers/admin/plans/delete-plan-definition.handler
+    events:
+      - httpApi:
+          path: /admin/plans/{planId}
+          method: delete
+  listPlanAudits:
+    handler: src/interfaces/http/handlers/admin/plans/list-plan-audits.handler
+    events:
+      - httpApi:
+          path: /admin/plans/{planId}/audits
+          method: get
+  listPublicPlanCatalog:
+    handler: src/interfaces/http/handlers/public/plans/list-catalog.handler
+    events:
+      - httpApi:
+          path: /plans/catalog
+          method: get
+  getHealth:
+    handler: src/interfaces/http/handlers/health/get-health.handler
+    events:
+      - httpApi:
+          path: /health
+          method: get
+  getCep:
+    handler: src/interfaces/http/handlers/integrations/brasil-api/get-cep.handler
+    events:
+      - httpApi:
+          path: /integrations/brasilapi/cep/{cep}
+          method: get
+  getCnpj:
+    handler: src/interfaces/http/handlers/integrations/brasil-api/get-cnpj.handler
+    events:
+      - httpApi:
+          path: /integrations/brasilapi/cnpj/{cnpj}
+          method: get
+  validateCpf:
+    handler: src/interfaces/http/handlers/integrations/brasil-api/validate-cpf.handler
+    events:
+      - httpApi:
+          path: /integrations/brasilapi/cpf/{cpf}
+          method: get
+
+resources:
+  Conditions:
+    IsNotLocal:
+      Fn::Not:
+        - Fn::Equals:
+            - ${sls:stage}
+            - local
+  Resources:
+    InsightsTable:
+      Type: AWS::DynamoDB::Table
+      Condition: IsNotLocal
+      Properties:
+        TableName: ${self:custom.stageConfig.tableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+    CustomersTable:
+      Type: AWS::DynamoDB::Table
+      Condition: IsNotLocal
+      Properties:
+        TableName: ${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+    PlansTable:
+      Type: AWS::DynamoDB::Table
+      Condition: IsNotLocal
+      Properties:
+        TableName: ${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+    BillingTable:
+      Type: AWS::DynamoDB::Table
+      Condition: IsNotLocal
+      Properties:
+        TableName: ${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+    FinanceTable:
+      Type: AWS::DynamoDB::Table
+      Condition: IsNotLocal
+      Properties:
+        TableName: ${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+    SurveysTable:
+      Type: AWS::DynamoDB::Table
+      Condition: IsNotLocal
+      Properties:
+        TableName: ${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL

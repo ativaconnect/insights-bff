@@ -1,0 +1,43 @@
+local:
+  region: us-east-1
+  tableName: insights-local
+  customersTableName: insights-customers-local
+  plansTableName: insights-plans-local
+  billingTableName: insights-billing-local
+  financeTableName: insights-finance-local
+  surveysTableName: insights-surveys-local
+  dynamoEndpoint: http://localhost:8000
+  jwtSecret: local-dev-secret
+
+dev:
+  region: us-east-1
+  tableName: insights-dev
+  customersTableName: insights-customers-dev
+  plansTableName: insights-plans-dev
+  billingTableName: insights-billing-dev
+  financeTableName: insights-finance-dev
+  surveysTableName: insights-surveys-dev
+  dynamoEndpoint: ''
+  jwtSecret: ${env:JWT_SECRET, 'replace-in-dev'}
+
+pet:
+  region: us-east-1
+  tableName: insights-pet
+  customersTableName: insights-customers-pet
+  plansTableName: insights-plans-pet
+  billingTableName: insights-billing-pet
+  financeTableName: insights-finance-pet
+  surveysTableName: insights-surveys-pet
+  dynamoEndpoint: ''
+  jwtSecret: ${env:JWT_SECRET, 'replace-in-pet'}
+
+prd:
+  region: us-east-1
+  tableName: insights-prd
+  customersTableName: insights-customers-prd
+  plansTableName: insights-plans-prd
+  billingTableName: insights-billing-prd
+  financeTableName: insights-finance-prd
+  surveysTableName: insights-surveys-prd
+  dynamoEndpoint: ''
+  jwtSecret: ${env:JWT_SECRET, 'replace-in-prd'}

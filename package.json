@@ -1,0 +1,46 @@
+{
+  "name": "insights-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Insights SaaS backend - serverless clean architecture",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "serverless offline --stage local",
+    "deploy": "serverless deploy",
+    "deploy:pet": "serverless deploy --stage pet",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prd": "serverless deploy --stage prd",
+    "info:pet": "serverless info --stage pet",
+    "info:dev": "serverless info --stage dev",
+    "info:prd": "serverless info --stage prd",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "local:infra": "docker compose -f docker-compose.local.yml up -d",
+    "local:infra:down": "docker compose -f docker-compose.local.yml down -v",
+    "local:create": "ts-node scripts/local/create-tables.ts",
+    "local:create:empty": "ts-node scripts/local/create-tables.ts --no-seed",
+    "local:create:seed": "ts-node scripts/local/create-tables.ts",
+    "local:domain:bootstrap": "ts-node scripts/local/domain-bootstrap.ts",
+    "local:seed:ajpavaneli": "ts-node scripts/local/seed-ajpavaneli.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.883.0",
+    "@aws-sdk/lib-dynamodb": "^3.883.0",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.152",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.13.5",
+    "eslint": "^9.20.1",
+    "serverless": "^3.39.0",
+    "serverless-esbuild": "^1.55.1",
+    "serverless-offline": "^13.9.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
