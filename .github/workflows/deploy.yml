@@ -45,10 +45,51 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Resolve AWS role ARN for stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.stage }}" in
+            pet)
+              value="${{ secrets.AWS_ROLE_TO_ASSUME_PET }}"
+              ;;
+            dev)
+              value="${{ secrets.AWS_ROLE_TO_ASSUME_DEV }}"
+              ;;
+            prd)
+              value="${{ secrets.AWS_ROLE_TO_ASSUME_PRD }}"
+              ;;
+            *)
+              echo "Stage invalido: ${{ inputs.stage }}"
+              exit 1
+              ;;
+          esac
+
+          if [ -z "${value}" ]; then
+            value="${{ secrets.AWS_ROLE_TO_ASSUME }}"
+          fi
+
+          if [ -z "${value}" ]; then
+            echo "Secret AWS_ROLE_TO_ASSUME ausente para stage ${{ inputs.stage }}."
+            exit 1
+          fi
+
+          if [[ "${value}" == *":policy/"* ]]; then
+            echo "AWS_ROLE_TO_ASSUME invalido: voce informou ARN de policy, precisa ser ARN de ROLE."
+            exit 1
+          fi
+
+          if [[ ! "${value}" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]]; then
+            echo "AWS_ROLE_TO_ASSUME invalido: formato esperado arn:aws:iam::<ACCOUNT_ID>:role/<ROLE_NAME>."
+            exit 1
+          fi
+
+          echo "AWS_ROLE_TO_ASSUME=${value}" >> "$GITHUB_ENV"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Resolve JWT secret for stage
@@ -77,6 +118,39 @@ jobs:
           fi
 
           echo "JWT_SECRET=${value}" >> "$GITHUB_ENV"
+
+      - name: Resolve APP_CLIENT_TOKEN for stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.stage }}" in
+            pet)
+              value="${{ secrets.APP_CLIENT_TOKEN_PET }}"
+              previous="${{ secrets.APP_CLIENT_TOKEN_PREVIOUS_PET }}"
+              ;;
+            dev)
+              value="${{ secrets.APP_CLIENT_TOKEN_DEV }}"
+              previous="${{ secrets.APP_CLIENT_TOKEN_PREVIOUS_DEV }}"
+              ;;
+            prd)
+              value="${{ secrets.APP_CLIENT_TOKEN_PRD }}"
+              previous="${{ secrets.APP_CLIENT_TOKEN_PREVIOUS_PRD }}"
+              ;;
+            *)
+              echo "Stage invalido: ${{ inputs.stage }}"
+              exit 1
+              ;;
+          esac
+
+          if [ -z "${value}" ]; then
+            echo "Secret APP_CLIENT_TOKEN nao configurado para stage ${{ inputs.stage }}"
+            exit 1
+          fi
+
+          echo "APP_CLIENT_TOKEN=${value}" >> "$GITHUB_ENV"
+          if [ -n "${previous}" ]; then
+            echo "APP_CLIENT_TOKEN_PREVIOUS=${previous}" >> "$GITHUB_ENV"
+          fi
 
       - name: Deploy stack
         run: npx serverless deploy --stage "${{ inputs.stage }}" --conceal

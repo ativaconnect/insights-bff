@@ -2,12 +2,22 @@
 
 ## 1) Secrets no repositório `insights-bff`
 
-Configure estes secrets em `Settings > Secrets and variables > Actions`:
+Configure estes secrets em `Settings > Secrets and variables > Actions`.
 
-- `AWS_ROLE_TO_ASSUME`: ARN da role assumida pelo GitHub Actions.
-- `JWT_SECRET_PET`
-- `JWT_SECRET_DEV`
-- `JWT_SECRET_PRD`
+Minimos obrigatorios:
+
+- `AWS_ROLE_TO_ASSUME` (ou por stage: `AWS_ROLE_TO_ASSUME_DEV|PET|PRD`)
+- `JWT_SECRET_DEV|PET|PRD`
+- `APP_CLIENT_TOKEN_DEV|PET|PRD`
+
+Opcionais para rotacao:
+
+- `APP_CLIENT_TOKEN_PREVIOUS_DEV|PET|PRD`
+
+Importante:
+
+- O valor de `AWS_ROLE_TO_ASSUME` precisa ser ARN de **ROLE** (ex.: `arn:aws:iam::500888846090:role/insights-bff-github-oidc-role`).
+- Nao use ARN de policy (ex.: `...:policy/...`), pois gera erro `Request ARN is invalid`.
 
 ## 2) Trust policy da role (OIDC GitHub)
 
