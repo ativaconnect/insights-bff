@@ -1,0 +1,82 @@
+name: Deploy BFF
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Ambiente AWS para deploy"
+        required: true
+        type: choice
+        options:
+          - pet
+          - dev
+          - prd
+      aws_region:
+        description: "Regiao AWS"
+        required: true
+        default: "us-east-1"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-bff-${{ github.event.inputs.stage || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Serverless (${{ inputs.stage }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    env:
+      SLS_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Resolve JWT secret for stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.stage }}" in
+            pet)
+              value="${{ secrets.JWT_SECRET_PET }}"
+              ;;
+            dev)
+              value="${{ secrets.JWT_SECRET_DEV }}"
+              ;;
+            prd)
+              value="${{ secrets.JWT_SECRET_PRD }}"
+              ;;
+            *)
+              echo "Stage invalido: ${{ inputs.stage }}"
+              exit 1
+              ;;
+          esac
+
+          if [ -z "${value}" ]; then
+            echo "Secret de JWT nao configurado para stage ${{ inputs.stage }}"
+            exit 1
+          fi
+
+          echo "JWT_SECRET=${value}" >> "$GITHUB_ENV"
+
+      - name: Deploy stack
+        run: npx serverless deploy --stage "${{ inputs.stage }}" --conceal
