@@ -24,9 +24,8 @@ export const dynamoDbDocumentClient = DynamoDBDocumentClient.from(baseClient, {
   }
 });
 
-export const tableName = process.env.DYNAMODB_TABLE_NAME ?? 'insights-local';
-export const customersTableName = process.env.DYNAMODB_CUSTOMERS_TABLE_NAME ?? tableName;
-export const plansTableName = process.env.DYNAMODB_PLANS_TABLE_NAME ?? tableName;
-export const billingTableName = process.env.DYNAMODB_BILLING_TABLE_NAME ?? tableName;
-export const financeTableName = process.env.DYNAMODB_FINANCE_TABLE_NAME ?? tableName;
-export const surveysTableName = process.env.DYNAMODB_SURVEYS_TABLE_NAME ?? tableName;
+export const customersTableName = process.env.DYNAMODB_CUSTOMERS_TABLE_NAME ?? 'insights-customers-local';
+export const plansTableName = process.env.DYNAMODB_PLANS_TABLE_NAME ?? 'insights-plans-local';
+export const billingTableName = process.env.DYNAMODB_BILLING_TABLE_NAME ?? 'insights-billing-local';
+export const financeTableName = process.env.DYNAMODB_FINANCE_TABLE_NAME ?? 'insights-finance-local';
+export const surveysTableName = process.env.DYNAMODB_SURVEYS_TABLE_NAME ?? 'insights-surveys-local';

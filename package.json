@@ -16,14 +16,11 @@
     "lint": "eslint . --ext .ts",
     "typecheck": "tsc --noEmit",
     "local:infra": "docker compose -f docker-compose.local.yml up -d",
-    "local:infra:down": "docker compose -f docker-compose.local.yml down -v",
     "local:create": "ts-node scripts/local/create-tables.ts",
-    "local:create:empty": "ts-node scripts/local/create-tables.ts --no-seed",
-    "local:create:seed": "ts-node scripts/local/create-tables.ts",
-    "local:domain:bootstrap": "ts-node scripts/local/domain-bootstrap.ts",
-    "local:seed:ajpavaneli": "ts-node scripts/local/seed-ajpavaneli.ts"
+    "local:seed": "ts-node scripts/local/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.883.0",
     "@aws-sdk/client-dynamodb": "^3.883.0",
     "@aws-sdk/lib-dynamodb": "^3.883.0",
     "jsonwebtoken": "^9.0.2",

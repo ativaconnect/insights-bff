@@ -38,6 +38,8 @@ provider:
         - x-amz-security-token
         - X-Amz-User-Agent
         - x-amz-user-agent
+        - X-Webhook-Token
+        - x-webhook-token
         - ngrok-skip-browser-warning
       allowedMethods:
         - GET
@@ -61,30 +63,31 @@ provider:
             - dynamodb:TransactWriteItems
             - dynamodb:DescribeTable
           Resource:
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.tableName}
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.tableName}/index/*
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}/index/*
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}/index/*
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}/index/*
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}/index/*
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
-            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.customersTableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.customersTableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.plansTableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.plansTableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.billingTableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.billingTableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName}/index/*
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName}/index/*
   environment:
     APP_STAGE: ${sls:stage}
     JWT_SECRET: ${self:custom.stageConfig.jwtSecret}
-    DYNAMODB_TABLE_NAME: ${self:custom.stageConfig.tableName}
-    DYNAMODB_CUSTOMERS_TABLE_NAME: ${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}
-    DYNAMODB_PLANS_TABLE_NAME: ${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}
-    DYNAMODB_BILLING_TABLE_NAME: ${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}
-    DYNAMODB_FINANCE_TABLE_NAME: ${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
-    DYNAMODB_SURVEYS_TABLE_NAME: ${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
+    DYNAMODB_CUSTOMERS_TABLE_NAME: ${self:custom.stageConfig.customersTableName}
+    DYNAMODB_PLANS_TABLE_NAME: ${self:custom.stageConfig.plansTableName}
+    DYNAMODB_BILLING_TABLE_NAME: ${self:custom.stageConfig.billingTableName}
+    DYNAMODB_FINANCE_TABLE_NAME: ${self:custom.stageConfig.financeTableName}
+    DYNAMODB_SURVEYS_TABLE_NAME: ${self:custom.stageConfig.surveysTableName}
     DYNAMODB_ENDPOINT: ${self:custom.stageConfig.dynamoEndpoint}
     APP_CLIENT_TOKEN: ${self:custom.stageConfig.appClientToken}
     APP_CLIENT_TOKEN_PREVIOUS: ${self:custom.stageConfig.appClientTokenPrevious, ''}
+    DEFAULT_ADMIN_NAME: ${self:custom.stageConfig.defaultAdminName, ''}
+    DEFAULT_ADMIN_USER: ${self:custom.stageConfig.defaultAdminUser, ''}
+    DEFAULT_ADMIN_PASSWORD: ${self:custom.stageConfig.defaultAdminPassword, ''}
+    DEFAULT_ADMIN_TENANT_ID: ${self:custom.stageConfig.defaultAdminTenantId, ''}
     LOGIN_WINDOW_SECONDS: ${self:custom.stageConfig.loginWindowSeconds, 900}
     LOGIN_LOCK_SECONDS: ${self:custom.stageConfig.loginLockSeconds, 900}
     LOGIN_MAX_ATTEMPTS_PER_LOGIN: ${self:custom.stageConfig.loginMaxAttemptsPerLogin, 5}
@@ -93,6 +96,14 @@ provider:
     CAPTCHA_ENABLED: ${self:custom.stageConfig.captchaEnabled, 'false'}
     CAPTCHA_SECRET: ${self:custom.stageConfig.captchaSecret, ''}
     CAPTCHA_VERIFY_URL: ${self:custom.stageConfig.captchaVerifyUrl, 'https://hcaptcha.com/siteverify'}
+    ANALYTICS_SNAPSHOT_STORAGE: ${self:custom.stageConfig.analyticsSnapshotStorage, 'filesystem'}
+    ANALYTICS_SNAPSHOT_LOCAL_DIR: ${self:custom.stageConfig.analyticsSnapshotLocalDir, '/tmp/analytics-snapshots'}
+    ANALYTICS_SNAPSHOT_S3_BUCKET: ${self:custom.stageConfig.analyticsSnapshotS3Bucket, ''}
+    ANALYTICS_SNAPSHOT_S3_REGION: ${self:custom.stageConfig.analyticsSnapshotS3Region, 'us-east-1'}
+    ANALYTICS_SNAPSHOT_S3_ENDPOINT: ${self:custom.stageConfig.analyticsSnapshotS3Endpoint, ''}
+    ANALYTICS_SNAPSHOT_S3_FORCE_PATH_STYLE: ${self:custom.stageConfig.analyticsSnapshotS3ForcePathStyle, 'false'}
+    ANALYTICS_SNAPSHOT_S3_ACCESS_KEY_ID: ${self:custom.stageConfig.analyticsSnapshotS3AccessKeyId, ''}
+    ANALYTICS_SNAPSHOT_S3_SECRET_ACCESS_KEY: ${self:custom.stageConfig.analyticsSnapshotS3SecretAccessKey, ''}
 
 custom:
   awsTags:
@@ -214,6 +225,18 @@ functions:
       - httpApi:
           path: /surveys/{surveyId}/responses
           method: get
+  listSurveyResponsesPage:
+    handler: src/interfaces/http/handlers/customer/surveys/list-responses-page.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}/responses/page
+          method: get
+  getSurveyResponsesSummary:
+    handler: src/interfaces/http/handlers/customer/surveys/get-responses-summary.handler
+    events:
+      - httpApi:
+          path: /surveys/{surveyId}/responses/summary
+          method: get
   getSurveyHeatmap:
     handler: src/interfaces/http/handlers/customer/surveys/get-heatmap.handler
     events:
@@ -256,6 +279,24 @@ functions:
       - httpApi:
           path: /admin/credits/requests
           method: get
+  listAdminCreditRequestsPage:
+    handler: src/interfaces/http/handlers/admin/credits/list-credit-purchase-requests-page.handler
+    events:
+      - httpApi:
+          path: /admin/credits/requests/page
+          method: get
+  getAdminPaymentConfig:
+    handler: src/interfaces/http/handlers/admin/payments/get-config.handler
+    events:
+      - httpApi:
+          path: /admin/payments/config
+          method: get
+  upsertAdminPaymentConfig:
+    handler: src/interfaces/http/handlers/admin/payments/upsert-config.handler
+    events:
+      - httpApi:
+          path: /admin/payments/config
+          method: put
   approveAdminCreditRequest:
     handler: src/interfaces/http/handlers/admin/credits/approve-credit-purchase-request.handler
     events:
@@ -268,6 +309,24 @@ functions:
       - httpApi:
           path: /admin/credits/requests/{requestId}/reject
           method: post
+  listAdminUsers:
+    handler: src/interfaces/http/handlers/admin/users/list-users.handler
+    events:
+      - httpApi:
+          path: /admin/users
+          method: get
+  createAdminUser:
+    handler: src/interfaces/http/handlers/admin/users/create-user.handler
+    events:
+      - httpApi:
+          path: /admin/users
+          method: post
+  updateAdminUser:
+    handler: src/interfaces/http/handlers/admin/users/update-user.handler
+    events:
+      - httpApi:
+          path: /admin/users/{userId}
+          method: put
   getAdminBillingCreditSales:
     handler: src/interfaces/http/handlers/admin/billing/get-credit-sales-report.handler
     events:
@@ -424,6 +483,12 @@ functions:
       - httpApi:
           path: /integrations/brasilapi/cpf/{cpf}
           method: get
+  receivePaymentWebhook:
+    handler: src/interfaces/http/handlers/webhooks/payments/receive-provider-callback.handler
+    events:
+      - httpApi:
+          path: /webhooks/payments/{provider}
+          method: post
 
 resources:
   Conditions:
@@ -433,62 +498,15 @@ resources:
             - ${sls:stage}
             - local
   Resources:
-    InsightsTable:
-      Type: AWS::DynamoDB::Table
-      Condition: IsNotLocal
-      Properties:
-        TableName: ${self:custom.stageConfig.tableName}
-        BillingMode: PAY_PER_REQUEST
-        Tags:
-          - Key: Project
-            Value: ${self:custom.awsTags.project}
-          - Key: Application
-            Value: ${self:custom.awsTags.application}
-          - Key: ManagedBy
-            Value: ${self:custom.awsTags.managedBy}
-          - Key: Environment
-            Value: ${sls:stage}
-        AttributeDefinitions:
-          - AttributeName: PK
-            AttributeType: S
-          - AttributeName: SK
-            AttributeType: S
-          - AttributeName: GSI1PK
-            AttributeType: S
-          - AttributeName: GSI1SK
-            AttributeType: S
-          - AttributeName: GSI2PK
-            AttributeType: S
-          - AttributeName: GSI2SK
-            AttributeType: S
-        KeySchema:
-          - AttributeName: PK
-            KeyType: HASH
-          - AttributeName: SK
-            KeyType: RANGE
-        GlobalSecondaryIndexes:
-          - IndexName: GSI1
-            KeySchema:
-              - AttributeName: GSI1PK
-                KeyType: HASH
-              - AttributeName: GSI1SK
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
-          - IndexName: GSI2
-            KeySchema:
-              - AttributeName: GSI2PK
-                KeyType: HASH
-              - AttributeName: GSI2SK
-                KeyType: RANGE
-            Projection:
-              ProjectionType: ALL
     CustomersTable:
       Type: AWS::DynamoDB::Table
       Condition: IsNotLocal
       Properties:
-        TableName: ${self:custom.stageConfig.customersTableName, self:custom.stageConfig.tableName}
+        TableName: ${self:custom.stageConfig.customersTableName}
         BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttlEpoch
+          Enabled: true
         Tags:
           - Key: Project
             Value: ${self:custom.awsTags.project}
@@ -524,7 +542,7 @@ resources:
               - AttributeName: GSI1SK
                 KeyType: RANGE
             Projection:
-              ProjectionType: ALL
+              ProjectionType: KEYS_ONLY
           - IndexName: GSI2
             KeySchema:
               - AttributeName: GSI2PK
@@ -537,8 +555,11 @@ resources:
       Type: AWS::DynamoDB::Table
       Condition: IsNotLocal
       Properties:
-        TableName: ${self:custom.stageConfig.plansTableName, self:custom.stageConfig.tableName}
+        TableName: ${self:custom.stageConfig.plansTableName}
         BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttlEpoch
+          Enabled: true
         Tags:
           - Key: Project
             Value: ${self:custom.awsTags.project}
@@ -574,7 +595,7 @@ resources:
               - AttributeName: GSI1SK
                 KeyType: RANGE
             Projection:
-              ProjectionType: ALL
+              ProjectionType: KEYS_ONLY
           - IndexName: GSI2
             KeySchema:
               - AttributeName: GSI2PK
@@ -587,8 +608,11 @@ resources:
       Type: AWS::DynamoDB::Table
       Condition: IsNotLocal
       Properties:
-        TableName: ${self:custom.stageConfig.billingTableName, self:custom.stageConfig.tableName}
+        TableName: ${self:custom.stageConfig.billingTableName}
         BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttlEpoch
+          Enabled: true
         Tags:
           - Key: Project
             Value: ${self:custom.awsTags.project}
@@ -624,7 +648,7 @@ resources:
               - AttributeName: GSI1SK
                 KeyType: RANGE
             Projection:
-              ProjectionType: ALL
+              ProjectionType: KEYS_ONLY
           - IndexName: GSI2
             KeySchema:
               - AttributeName: GSI2PK
@@ -637,8 +661,11 @@ resources:
       Type: AWS::DynamoDB::Table
       Condition: IsNotLocal
       Properties:
-        TableName: ${self:custom.stageConfig.financeTableName, self:custom.stageConfig.tableName}
+        TableName: ${self:custom.stageConfig.financeTableName}
         BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttlEpoch
+          Enabled: true
         Tags:
           - Key: Project
             Value: ${self:custom.awsTags.project}
@@ -661,6 +688,10 @@ resources:
             AttributeType: S
           - AttributeName: GSI2SK
             AttributeType: S
+          - AttributeName: GSI3PK
+            AttributeType: S
+          - AttributeName: GSI3SK
+            AttributeType: S
         KeySchema:
           - AttributeName: PK
             KeyType: HASH
@@ -674,7 +705,7 @@ resources:
               - AttributeName: GSI1SK
                 KeyType: RANGE
             Projection:
-              ProjectionType: ALL
+              ProjectionType: KEYS_ONLY
           - IndexName: GSI2
             KeySchema:
               - AttributeName: GSI2PK
@@ -683,12 +714,23 @@ resources:
                 KeyType: RANGE
             Projection:
               ProjectionType: ALL
+          - IndexName: GSI3
+            KeySchema:
+              - AttributeName: GSI3PK
+                KeyType: HASH
+              - AttributeName: GSI3SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
     SurveysTable:
       Type: AWS::DynamoDB::Table
       Condition: IsNotLocal
       Properties:
-        TableName: ${self:custom.stageConfig.surveysTableName, self:custom.stageConfig.tableName}
+        TableName: ${self:custom.stageConfig.surveysTableName}
         BillingMode: PAY_PER_REQUEST
+        TimeToLiveSpecification:
+          AttributeName: ttlEpoch
+          Enabled: true
         Tags:
           - Key: Project
             Value: ${self:custom.awsTags.project}
@@ -724,7 +766,7 @@ resources:
               - AttributeName: GSI1SK
                 KeyType: RANGE
             Projection:
-              ProjectionType: ALL
+              ProjectionType: KEYS_ONLY
           - IndexName: GSI2
             KeySchema:
               - AttributeName: GSI2PK

@@ -2,7 +2,6 @@ local:
   region: us-east-1
   corsAllowedOrigin: http://localhost:4200
   apiDomain: localhost:3001
-  tableName: insights-local
   customersTableName: insights-customers-local
   plansTableName: insights-plans-local
   billingTableName: insights-billing-local
@@ -12,6 +11,10 @@ local:
   jwtSecret: local-dev-secret
   appClientToken: local-app-client-token
   appClientTokenPrevious: ''
+  defaultAdminName: Administrador Principal
+  defaultAdminUser: admin@ativaconnect.com.br
+  defaultAdminPassword: admin123
+  defaultAdminTenantId: tenant-owner-admin
   loginWindowSeconds: 900
   loginLockSeconds: 900
   loginMaxAttemptsPerLogin: 10
@@ -20,12 +23,19 @@ local:
   captchaEnabled: false
   captchaSecret: ''
   captchaVerifyUrl: https://hcaptcha.com/siteverify
+  analyticsSnapshotStorage: s3
+  analyticsSnapshotLocalDir: .local/s3/analytics-snapshots
+  analyticsSnapshotS3Bucket: insights-analytics-local
+  analyticsSnapshotS3Region: us-east-1
+  analyticsSnapshotS3Endpoint: http://localhost:9000
+  analyticsSnapshotS3ForcePathStyle: true
+  analyticsSnapshotS3AccessKeyId: minioadmin
+  analyticsSnapshotS3SecretAccessKey: minioadmin
 
 dev:
   region: us-east-1
   corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_DEV, 'https://insigths-dev.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_DEV, 'insigths.bff-dev.ativaconnect.com.br'}
-  tableName: insights-dev
   customersTableName: insights-customers-dev
   plansTableName: insights-plans-dev
   billingTableName: insights-billing-dev
@@ -35,6 +45,10 @@ dev:
   jwtSecret: ${env:JWT_SECRET, 'replace-in-dev'}
   appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-dev'}
   appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  defaultAdminName: ${env:DEFAULT_ADMIN_NAME, 'Administrador Principal'}
+  defaultAdminUser: ${env:DEFAULT_ADMIN_USER, 'admin@ativaconnect.com.br'}
+  defaultAdminPassword: ${env:DEFAULT_ADMIN_PASSWORD, 'admin123'}
+  defaultAdminTenantId: ${env:DEFAULT_ADMIN_TENANT_ID, 'tenant-owner-admin'}
   loginWindowSeconds: ${env:LOGIN_WINDOW_SECONDS_DEV, 900}
   loginLockSeconds: ${env:LOGIN_LOCK_SECONDS_DEV, 900}
   loginMaxAttemptsPerLogin: ${env:LOGIN_MAX_ATTEMPTS_PER_LOGIN_DEV, 5}
@@ -43,12 +57,19 @@ dev:
   captchaEnabled: ${env:CAPTCHA_ENABLED_DEV, false}
   captchaSecret: ${env:CAPTCHA_SECRET_DEV, ''}
   captchaVerifyUrl: ${env:CAPTCHA_VERIFY_URL_DEV, 'https://hcaptcha.com/siteverify'}
+  analyticsSnapshotStorage: ${env:ANALYTICS_SNAPSHOT_STORAGE_DEV, 'filesystem'}
+  analyticsSnapshotLocalDir: ${env:ANALYTICS_SNAPSHOT_LOCAL_DIR_DEV, '/tmp/analytics-snapshots'}
+  analyticsSnapshotS3Bucket: ${env:ANALYTICS_SNAPSHOT_S3_BUCKET_DEV, ''}
+  analyticsSnapshotS3Region: ${env:ANALYTICS_SNAPSHOT_S3_REGION_DEV, 'us-east-1'}
+  analyticsSnapshotS3Endpoint: ${env:ANALYTICS_SNAPSHOT_S3_ENDPOINT_DEV, ''}
+  analyticsSnapshotS3ForcePathStyle: ${env:ANALYTICS_SNAPSHOT_S3_FORCE_PATH_STYLE_DEV, false}
+  analyticsSnapshotS3AccessKeyId: ${env:ANALYTICS_SNAPSHOT_S3_ACCESS_KEY_ID_DEV, ''}
+  analyticsSnapshotS3SecretAccessKey: ${env:ANALYTICS_SNAPSHOT_S3_SECRET_ACCESS_KEY_DEV, ''}
 
 pet:
   region: us-east-1
   corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PET, 'https://insigths-pet.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_PET, 'insigths.bff-pet.ativaconnect.com.br'}
-  tableName: insights-pet
   customersTableName: insights-customers-pet
   plansTableName: insights-plans-pet
   billingTableName: insights-billing-pet
@@ -58,6 +79,10 @@ pet:
   jwtSecret: ${env:JWT_SECRET, 'replace-in-pet'}
   appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-pet'}
   appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  defaultAdminName: ${env:DEFAULT_ADMIN_NAME, 'Administrador Principal'}
+  defaultAdminUser: ${env:DEFAULT_ADMIN_USER, 'admin@ativaconnect.com.br'}
+  defaultAdminPassword: ${env:DEFAULT_ADMIN_PASSWORD, 'admin123'}
+  defaultAdminTenantId: ${env:DEFAULT_ADMIN_TENANT_ID, 'tenant-owner-admin'}
   loginWindowSeconds: ${env:LOGIN_WINDOW_SECONDS_PET, 900}
   loginLockSeconds: ${env:LOGIN_LOCK_SECONDS_PET, 900}
   loginMaxAttemptsPerLogin: ${env:LOGIN_MAX_ATTEMPTS_PER_LOGIN_PET, 5}
@@ -66,12 +91,19 @@ pet:
   captchaEnabled: ${env:CAPTCHA_ENABLED_PET, false}
   captchaSecret: ${env:CAPTCHA_SECRET_PET, ''}
   captchaVerifyUrl: ${env:CAPTCHA_VERIFY_URL_PET, 'https://hcaptcha.com/siteverify'}
+  analyticsSnapshotStorage: ${env:ANALYTICS_SNAPSHOT_STORAGE_PET, 'filesystem'}
+  analyticsSnapshotLocalDir: ${env:ANALYTICS_SNAPSHOT_LOCAL_DIR_PET, '/tmp/analytics-snapshots'}
+  analyticsSnapshotS3Bucket: ${env:ANALYTICS_SNAPSHOT_S3_BUCKET_PET, ''}
+  analyticsSnapshotS3Region: ${env:ANALYTICS_SNAPSHOT_S3_REGION_PET, 'us-east-1'}
+  analyticsSnapshotS3Endpoint: ${env:ANALYTICS_SNAPSHOT_S3_ENDPOINT_PET, ''}
+  analyticsSnapshotS3ForcePathStyle: ${env:ANALYTICS_SNAPSHOT_S3_FORCE_PATH_STYLE_PET, false}
+  analyticsSnapshotS3AccessKeyId: ${env:ANALYTICS_SNAPSHOT_S3_ACCESS_KEY_ID_PET, ''}
+  analyticsSnapshotS3SecretAccessKey: ${env:ANALYTICS_SNAPSHOT_S3_SECRET_ACCESS_KEY_PET, ''}
 
 prd:
   region: us-east-1
   corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PRD, 'https://insigths.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_PRD, 'insigths.bff.ativaconnect.com.br'}
-  tableName: insights-prd
   customersTableName: insights-customers-prd
   plansTableName: insights-plans-prd
   billingTableName: insights-billing-prd
@@ -81,6 +113,10 @@ prd:
   jwtSecret: ${env:JWT_SECRET, 'replace-in-prd'}
   appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-prd'}
   appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  defaultAdminName: ${env:DEFAULT_ADMIN_NAME, 'Administrador Principal'}
+  defaultAdminUser: ${env:DEFAULT_ADMIN_USER, 'admin@ativaconnect.com.br'}
+  defaultAdminPassword: ${env:DEFAULT_ADMIN_PASSWORD, 'admin123'}
+  defaultAdminTenantId: ${env:DEFAULT_ADMIN_TENANT_ID, 'tenant-owner-admin'}
   loginWindowSeconds: ${env:LOGIN_WINDOW_SECONDS_PRD, 900}
   loginLockSeconds: ${env:LOGIN_LOCK_SECONDS_PRD, 900}
   loginMaxAttemptsPerLogin: ${env:LOGIN_MAX_ATTEMPTS_PER_LOGIN_PRD, 5}
@@ -89,3 +125,11 @@ prd:
   captchaEnabled: ${env:CAPTCHA_ENABLED_PRD, false}
   captchaSecret: ${env:CAPTCHA_SECRET_PRD, ''}
   captchaVerifyUrl: ${env:CAPTCHA_VERIFY_URL_PRD, 'https://hcaptcha.com/siteverify'}
+  analyticsSnapshotStorage: ${env:ANALYTICS_SNAPSHOT_STORAGE_PRD, 'filesystem'}
+  analyticsSnapshotLocalDir: ${env:ANALYTICS_SNAPSHOT_LOCAL_DIR_PRD, '/tmp/analytics-snapshots'}
+  analyticsSnapshotS3Bucket: ${env:ANALYTICS_SNAPSHOT_S3_BUCKET_PRD, ''}
+  analyticsSnapshotS3Region: ${env:ANALYTICS_SNAPSHOT_S3_REGION_PRD, 'us-east-1'}
+  analyticsSnapshotS3Endpoint: ${env:ANALYTICS_SNAPSHOT_S3_ENDPOINT_PRD, ''}
+  analyticsSnapshotS3ForcePathStyle: ${env:ANALYTICS_SNAPSHOT_S3_FORCE_PATH_STYLE_PRD, false}
+  analyticsSnapshotS3AccessKeyId: ${env:ANALYTICS_SNAPSHOT_S3_ACCESS_KEY_ID_PRD, ''}
+  analyticsSnapshotS3SecretAccessKey: ${env:ANALYTICS_SNAPSHOT_S3_SECRET_ACCESS_KEY_PRD, ''}
