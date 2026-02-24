@@ -125,6 +125,18 @@ custom:
     httpPort: 3001
 
 functions:
+  getSwaggerUi:
+    handler: src/interfaces/http/handlers/docs/get-swagger-ui.handler
+    events:
+      - httpApi:
+          path: /docs
+          method: get
+  getOpenApiJson:
+    handler: src/interfaces/http/handlers/docs/get-openapi.handler
+    events:
+      - httpApi:
+          path: /docs/openapi.json
+          method: get
   register:
     handler: src/interfaces/http/handlers/auth/register.handler
     events:
