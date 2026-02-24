@@ -93,6 +93,7 @@ export interface CustomerSurvey {
   waves?: SurveyWave[];
   locationCapture?: SurveyLocationCapture;
   kioskSettings?: SurveyKioskSettings;
+  responsesCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +118,29 @@ export interface SurveyResponseRecord {
   answers: Record<string, unknown>;
   metadata?: SurveyResponseMetadata;
   submittedAt: string;
+}
+
+interface SurveyResponseLockRecord {
+  PK: string;
+  SK: string;
+  entityType: string;
+  tenantId: string;
+  surveyId: string;
+  clientResponseId: string;
+  responsePk: string;
+  responseSk: string;
+  createdAt: string;
+  archivedAt?: string;
+}
+
+export interface SurveyAnalyticsSnapshotData {
+  version: string;
+  tenantId: string;
+  surveyId: string;
+  responsesCount: number;
+  sourceUpdatedAt: string;
+  generatedAt: string;
+  heatmap: Array<{ lat: number; lng: number; count: number }>;
 }
 
 export class SurveySubmissionError extends Error {
@@ -149,7 +173,32 @@ const responseLockKey = (surveyId: string, clientResponseId: string) => ({
   SK: `RESPONSE_LOCK#${clientResponseId}`
 });
 
+const sanitizeCounterPart = (value: string): string => encodeURIComponent(String(value).trim());
+
+const interviewerCounterKey = (
+  surveyId: string,
+  interviewerId: string,
+  periodStart: string,
+  periodEnd: string
+) => ({
+  PK: `SURVEY#${surveyId}`,
+  SK: `COUNTER#INTERVIEWER#${sanitizeCounterPart(interviewerId)}#${sanitizeCounterPart(periodStart)}#${sanitizeCounterPart(periodEnd)}`
+});
+
+const quotaCounterKey = (surveyId: string, questionId: string, optionId: string) => ({
+  PK: `SURVEY#${surveyId}`,
+  SK: `COUNTER#QUOTA#${sanitizeCounterPart(questionId)}#${sanitizeCounterPart(optionId)}`
+});
+
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+const responseLockTtlDays = Number(process.env.SURVEY_RESPONSE_LOCK_TTL_DAYS ?? 120);
+const toTtlEpoch = (baseIso: string): number => {
+  const base = new Date(baseIso).getTime();
+  if (!Number.isFinite(base)) {
+    return Math.floor(Date.now() / 1000) + 120 * 24 * 60 * 60;
+  }
+  return Math.floor((base + Math.max(1, responseLockTtlDays) * 24 * 60 * 60 * 1000) / 1000);
+};
 
 const toDate = (value: string, boundary: 'start' | 'end' = 'start'): Date => {
   const raw = String(value ?? '').trim();
@@ -190,21 +239,45 @@ const toGeoPoint = (input: unknown): SurveyGeoPoint | undefined => {
   };
 };
 
+const encodeCursor = (value: Record<string, unknown> | undefined): string | undefined => {
+  if (!value) return undefined;
+  return Buffer.from(JSON.stringify(value), 'utf-8').toString('base64');
+};
+
+const decodeCursor = (value: string | undefined): Record<string, unknown> | undefined => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(Buffer.from(raw, 'base64').toString('utf-8')) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+};
+
 export class CustomerSurveyRepository {
   async list(tenantId: string): Promise<CustomerSurvey[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: surveysTableName,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `TENANT#${tenantId}`,
-          ':sk': 'SURVEY#'
-        },
-        ScanIndexForward: false
-      })
-    );
+    const items: CustomerSurvey[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    return (output.Items ?? []).map((item) => item as CustomerSurvey);
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: surveysTableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+          ExpressionAttributeValues: {
+            ':pk': `TENANT#${tenantId}`,
+            ':sk': 'SURVEY#'
+          },
+          ScanIndexForward: false,
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+
+      items.push(...(output.Items ?? []).map((item) => item as CustomerSurvey));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    return items;
   }
 
   async listAvailableForInterviewer(
@@ -297,6 +370,7 @@ export class CustomerSurveyRepository {
       waves: payload.waves,
       locationCapture: payload.locationCapture,
       kioskSettings: payload.kioskSettings,
+      responsesCount: 0,
       createdAt: now,
       updatedAt: now
     };
@@ -405,18 +479,13 @@ export class CustomerSurveyRepository {
     }
 
     const maxResponsesPerSurvey = options?.maxResponsesPerSurvey;
-    if (maxResponsesPerSurvey && maxResponsesPerSurvey > 0) {
-      const totalResponses = await this.countSurveyResponses(surveyId);
-      if (totalResponses >= maxResponsesPerSurvey) {
-        throw new SurveySubmissionError(
-          'PLAN_LIMIT_REACHED',
-          `Limite de ${maxResponsesPerSurvey} respostas por pesquisa atingido para o seu plano.`
-        );
-      }
-    }
 
-    await this.ensureInterviewerPolicy(survey, options?.interviewerId, submittedAtDate);
-    await this.ensureSurveyQuotas(survey, answers);
+    const resolvedInterviewerAssignment = this.resolveInterviewerAssignment(
+      survey,
+      options?.interviewerId,
+      submittedAtDate
+    );
+    const matchedQuotaRules = this.resolveMatchedQuotaRules(survey, answers);
     const defaultCreditsBalance = Number(options?.defaultCreditsBalance ?? 0);
     const seedCredits = Number.isFinite(defaultCreditsBalance) && defaultCreditsBalance >= 0
       ? Math.floor(defaultCreditsBalance)
@@ -438,9 +507,92 @@ export class CustomerSurveyRepository {
     };
 
     try {
+      const surveyLimitUpdate = {
+        Update: {
+          TableName: surveysTableName,
+          Key: surveyKey(tenantId, surveyId),
+          UpdateExpression: 'SET responsesCount = if_not_exists(responsesCount, :zero) + :one',
+          ConditionExpression:
+            maxResponsesPerSurvey && maxResponsesPerSurvey > 0
+              ? 'attribute_exists(PK) AND if_not_exists(responsesCount, :zero) < :maxResponses'
+              : 'attribute_exists(PK)',
+          ExpressionAttributeValues:
+            maxResponsesPerSurvey && maxResponsesPerSurvey > 0
+              ? {
+                  ':zero': 0,
+                  ':one': 1,
+                  ':maxResponses': maxResponsesPerSurvey
+                }
+              : {
+                  ':zero': 0,
+                  ':one': 1
+                }
+        }
+      };
+
+      const interviewerCounterUpdate = resolvedInterviewerAssignment
+        ? [
+            {
+              Update: {
+                TableName: surveysTableName,
+                Key: interviewerCounterKey(
+                  surveyId,
+                  resolvedInterviewerAssignment.interviewerId,
+                  resolvedInterviewerAssignment.periodStart,
+                  resolvedInterviewerAssignment.periodEnd
+                ),
+                UpdateExpression:
+                  'SET #count = if_not_exists(#count, :zero) + :one, entityType = :entityType, surveyId = :surveyId, interviewerId = :interviewerId, periodStart = :periodStart, periodEnd = :periodEnd, updatedAt = :updatedAt',
+                ConditionExpression: 'if_not_exists(#count, :zero) < :maxForms',
+                ExpressionAttributeNames: {
+                  '#count': 'count'
+                },
+                ExpressionAttributeValues: {
+                  ':zero': 0,
+                  ':one': 1,
+                  ':maxForms': Number(resolvedInterviewerAssignment.maxForms),
+                  ':entityType': 'SURVEY_COUNTER_INTERVIEWER',
+                  ':surveyId': surveyId,
+                  ':interviewerId': resolvedInterviewerAssignment.interviewerId,
+                  ':periodStart': resolvedInterviewerAssignment.periodStart,
+                  ':periodEnd': resolvedInterviewerAssignment.periodEnd,
+                  ':updatedAt': new Date().toISOString()
+                }
+              }
+            }
+          ]
+        : [];
+
+      const quotaCounterUpdates = matchedQuotaRules.map((rule) => ({
+        Update: {
+          TableName: surveysTableName,
+          Key: quotaCounterKey(surveyId, rule.questionId, rule.optionId),
+          UpdateExpression:
+            'SET #count = if_not_exists(#count, :zero) + :one, entityType = :entityType, surveyId = :surveyId, questionId = :questionId, optionId = :optionId, ruleName = :ruleName, updatedAt = :updatedAt',
+          ConditionExpression: 'if_not_exists(#count, :zero) < :maxResponses',
+          ExpressionAttributeNames: {
+            '#count': 'count'
+          },
+          ExpressionAttributeValues: {
+            ':zero': 0,
+            ':one': 1,
+            ':maxResponses': Number(rule.maxResponses),
+            ':entityType': 'SURVEY_COUNTER_QUOTA',
+            ':surveyId': surveyId,
+            ':questionId': rule.questionId,
+            ':optionId': rule.optionId,
+            ':ruleName': rule.name,
+            ':updatedAt': new Date().toISOString()
+          }
+        }
+      }));
+
       await dynamoDbDocumentClient.send(
         new TransactWriteCommand({
           TransactItems: [
+            surveyLimitUpdate,
+            ...interviewerCounterUpdate,
+            ...quotaCounterUpdates,
             {
               Update: {
                 TableName: surveysTableName,
@@ -470,7 +622,8 @@ export class CustomerSurveyRepository {
                   clientResponseId,
                   responsePk: `SURVEY#${surveyId}`,
                   responseSk: `RESPONSE#${response.submittedAt}#${response.id}`,
-                  createdAt: new Date().toISOString()
+                  createdAt: new Date().toISOString(),
+                  ttlEpoch: toTtlEpoch(response.submittedAt)
                 },
                 ConditionExpression: 'attribute_not_exists(PK) AND attribute_not_exists(SK)'
               }
@@ -502,22 +655,55 @@ export class CustomerSurveyRepository {
         return existing;
       }
 
-       const tenantState = await dynamoDbDocumentClient.send(
-         new GetCommand({
-           TableName: surveysTableName,
-           Key: {
-             PK: `TENANT#${tenantId}`,
-             SK: 'PROFILE'
-           }
-         })
-       );
-       const balance = Number(tenantState.Item?.questionnaireCreditsBalance ?? 0);
-       if (!Number.isFinite(balance) || balance <= 0) {
-         throw new SurveySubmissionError(
-           'PLAN_LIMIT_REACHED',
-           'Saldo de creditos insuficiente para registrar novas respostas.'
-         );
-       }
+      if (maxResponsesPerSurvey && maxResponsesPerSurvey > 0) {
+        const surveyState = await this.getById(tenantId, surveyId);
+        const count = Number(surveyState?.responsesCount ?? 0);
+        if (Number.isFinite(count) && count >= maxResponsesPerSurvey) {
+          throw new SurveySubmissionError(
+            'PLAN_LIMIT_REACHED',
+            `Limite de ${maxResponsesPerSurvey} respostas por pesquisa atingido para o seu plano.`
+          );
+        }
+      }
+
+      const tenantState = await dynamoDbDocumentClient.send(
+        new GetCommand({
+          TableName: surveysTableName,
+          Key: {
+            PK: `TENANT#${tenantId}`,
+            SK: 'PROFILE'
+          }
+        })
+      );
+      const balance = Number(tenantState.Item?.questionnaireCreditsBalance ?? 0);
+      if (!Number.isFinite(balance) || balance <= 0) {
+        throw new SurveySubmissionError(
+          'PLAN_LIMIT_REACHED',
+          'Saldo de creditos insuficiente para registrar novas respostas.'
+        );
+      }
+
+      if (resolvedInterviewerAssignment) {
+        const interviewerCount = await this.getInterviewerCounterCount(
+          surveyId,
+          resolvedInterviewerAssignment.interviewerId,
+          resolvedInterviewerAssignment.periodStart,
+          resolvedInterviewerAssignment.periodEnd
+        );
+        if (interviewerCount >= Number(resolvedInterviewerAssignment.maxForms)) {
+          throw new SurveySubmissionError('INTERVIEWER_QUOTA_REACHED', 'Cota de formularios do entrevistador atingida.');
+        }
+      }
+
+      for (const rule of matchedQuotaRules) {
+        const used = await this.getQuotaCounterCount(surveyId, rule.questionId, rule.optionId);
+        if (used >= Number(rule.maxResponses)) {
+          throw new SurveySubmissionError(
+            'SURVEY_QUOTA_REACHED',
+            `Quota atingida para "${rule.name}" (${rule.maxResponses}).`
+          );
+        }
+      }
 
       throw error;
     }
@@ -590,6 +776,118 @@ export class CustomerSurveyRepository {
     return items;
   }
 
+  async listResponsesPage(
+    tenantId: string,
+    surveyId: string,
+    limit: number,
+    cursor?: string
+  ): Promise<{ items: SurveyResponseRecord[]; nextCursor?: string }> {
+    const survey = await this.getById(tenantId, surveyId);
+    if (!survey) {
+      return { items: [] };
+    }
+
+    const normalizedLimit = Number.isFinite(limit) ? Math.max(1, Math.min(200, Math.floor(limit))) : 50;
+    const output = await dynamoDbDocumentClient.send(
+      new QueryCommand({
+        TableName: surveysTableName,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `SURVEY#${surveyId}`,
+          ':sk': 'RESPONSE#'
+        },
+        ScanIndexForward: false,
+        Limit: normalizedLimit,
+        ExclusiveStartKey: decodeCursor(cursor)
+      })
+    );
+
+    return {
+      items: (output.Items ?? []) as SurveyResponseRecord[],
+      nextCursor: encodeCursor(output.LastEvaluatedKey as Record<string, unknown> | undefined)
+    };
+  }
+
+  async listResponsesUntil(tenantId: string, surveyId: string, cutoffIso: string): Promise<SurveyResponseRecord[]> {
+    const survey = await this.getById(tenantId, surveyId);
+    if (!survey) {
+      return [];
+    }
+
+    const items: SurveyResponseRecord[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: surveysTableName,
+          KeyConditionExpression: 'PK = :pk AND SK BETWEEN :from AND :to',
+          ExpressionAttributeValues: {
+            ':pk': `SURVEY#${surveyId}`,
+            ':from': 'RESPONSE#',
+            ':to': `RESPONSE#${cutoffIso}~`
+          },
+          ScanIndexForward: true,
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+
+      items.push(...(output.Items ?? []).map((item) => item as SurveyResponseRecord));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    return items;
+  }
+
+  async archiveAndDeleteResponses(tenantId: string, surveyId: string, responses: SurveyResponseRecord[]): Promise<void> {
+    const uniqueByResponseKey = new Map<string, SurveyResponseRecord>();
+    for (const response of responses) {
+      uniqueByResponseKey.set(`${response.submittedAt}#${response.id}`, response);
+    }
+    const unique = Array.from(uniqueByResponseKey.values());
+    if (!unique.length) {
+      return;
+    }
+
+    const chunkSize = 10;
+    for (let i = 0; i < unique.length; i += chunkSize) {
+      const chunk = unique.slice(i, i + chunkSize);
+      await dynamoDbDocumentClient.send(
+        new TransactWriteCommand({
+          TransactItems: chunk.flatMap((response) => [
+            {
+              Put: {
+                TableName: surveysTableName,
+                Item: {
+                  ...(() => {
+                    const nowIso = new Date().toISOString();
+                    return {
+                      ...responseLockKey(surveyId, response.clientResponseId),
+                      entityType: 'SURVEY_RESPONSE_LOCK',
+                      tenantId,
+                      surveyId,
+                      clientResponseId: response.clientResponseId,
+                      responsePk: `SURVEY#${surveyId}`,
+                      responseSk: `RESPONSE#${response.submittedAt}#${response.id}`,
+                      createdAt: nowIso,
+                      archivedAt: nowIso,
+                      ttlEpoch: toTtlEpoch(nowIso)
+                    };
+                  })(),
+                }
+              }
+            },
+            {
+              Delete: {
+                TableName: surveysTableName,
+                Key: responseKey(surveyId, response.id, response.submittedAt)
+              }
+            }
+          ])
+        })
+      );
+    }
+  }
+
   async heatmap(tenantId: string, surveyId: string): Promise<Array<{ lat: number; lng: number; count: number }>> {
     const survey = await this.getById(tenantId, surveyId);
     if (!survey || !survey.locationCapture?.captureEnabled) {
@@ -607,6 +905,10 @@ export class CustomerSurveyRepository {
           ExpressionAttributeValues: {
             ':pk': `SURVEY#${surveyId}`,
             ':sk': 'RESPONSE#'
+          },
+          ProjectionExpression: '#metadata',
+          ExpressionAttributeNames: {
+            '#metadata': 'metadata'
           },
           ExclusiveStartKey: lastEvaluatedKey
         })
@@ -636,6 +938,118 @@ export class CustomerSurveyRepository {
     return Array.from(points.values()).sort((a, b) => b.count - a.count);
   }
 
+  async getResponsesSummary(tenantId: string, surveyId: string): Promise<{ surveyId: string; responsesCount: number } | null> {
+    const survey = await this.getById(tenantId, surveyId);
+    if (!survey) {
+      return null;
+    }
+
+    const directCount = Number(survey.responsesCount);
+    if (Number.isFinite(directCount) && directCount >= 0) {
+      return {
+        surveyId,
+        responsesCount: directCount
+      };
+    }
+
+    const fallback = await this.countSurveyResponses(surveyId);
+    return {
+      surveyId,
+      responsesCount: fallback
+    };
+  }
+
+  async computeAnalyticsSnapshot(
+    tenantId: string,
+    surveyId: string,
+    options?: {
+      version?: string;
+      baselineResponsesCount?: number;
+      sourceUpdatedAt?: string;
+      archivedHeatmap?: Array<{ lat: number; lng: number; count: number }>;
+    }
+  ): Promise<SurveyAnalyticsSnapshotData | null> {
+    const survey = await this.getById(tenantId, surveyId);
+    if (!survey) {
+      return null;
+    }
+
+    const baseCount = Number(options?.baselineResponsesCount ?? survey.responsesCount);
+    const countFromSurvey = Number.isFinite(baseCount) && baseCount >= 0 ? Math.floor(baseCount) : NaN;
+    const responsesCount = Number.isFinite(countFromSurvey) ? countFromSurvey : await this.countSurveyResponses(surveyId);
+    const sourceUpdatedAt = String(options?.sourceUpdatedAt ?? survey.updatedAt ?? '');
+    const version = String(options?.version ?? `${responsesCount}:${sourceUpdatedAt}`);
+
+    const heatmapMap = new Map<string, { lat: number; lng: number; count: number }>();
+    for (const archived of options?.archivedHeatmap ?? []) {
+      const lat = Number(archived.lat);
+      const lng = Number(archived.lng);
+      const count = Number(archived.count);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(count) || count <= 0) {
+        continue;
+      }
+      const key = `${lat}|${lng}`;
+      const current = heatmapMap.get(key);
+      if (current) {
+        current.count += Math.floor(count);
+      } else {
+        heatmapMap.set(key, { lat, lng, count: Math.floor(count) });
+      }
+    }
+
+    if (survey.locationCapture?.captureEnabled && responsesCount > 0) {
+      let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+      do {
+        const output = await dynamoDbDocumentClient.send(
+          new QueryCommand({
+            TableName: surveysTableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+            ExpressionAttributeValues: {
+              ':pk': `SURVEY#${surveyId}`,
+              ':sk': 'RESPONSE#'
+            },
+            ProjectionExpression: '#metadata',
+            ExpressionAttributeNames: {
+              '#metadata': 'metadata'
+            },
+            ExclusiveStartKey: lastEvaluatedKey
+          })
+        );
+
+        for (const item of output.Items ?? []) {
+          const location = toGeoPoint((item as SurveyResponseRecord).metadata?.location);
+          if (!location) {
+            continue;
+          }
+
+          const lat = Number(location.lat.toFixed(3));
+          const lng = Number(location.lng.toFixed(3));
+          const key = `${lat}|${lng}`;
+          const current = heatmapMap.get(key);
+          if (current) {
+            current.count += 1;
+          } else {
+            heatmapMap.set(key, { lat, lng, count: 1 });
+          }
+        }
+
+        lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (lastEvaluatedKey);
+
+    }
+
+    return {
+      version,
+      tenantId,
+      surveyId,
+      responsesCount,
+      sourceUpdatedAt,
+      generatedAt: new Date().toISOString(),
+      heatmap: Array.from(heatmapMap.values()).sort((a, b) => b.count - a.count)
+    };
+  }
+
   private async getResponseByClientResponseId(
     surveyId: string,
     clientResponseId: string
@@ -647,8 +1061,9 @@ export class CustomerSurveyRepository {
       })
     );
 
-    const responsePk = lock.Item?.responsePk as string | undefined;
-    const responseSk = lock.Item?.responseSk as string | undefined;
+    const lockItem = lock.Item as SurveyResponseLockRecord | undefined;
+    const responsePk = lockItem?.responsePk as string | undefined;
+    const responseSk = lockItem?.responseSk as string | undefined;
     if (!responsePk || !responseSk) {
       return null;
     }
@@ -663,17 +1078,34 @@ export class CustomerSurveyRepository {
       })
     );
 
-    return (existing.Item as SurveyResponseRecord | undefined) ?? null;
+    if (existing.Item) {
+      return existing.Item as SurveyResponseRecord;
+    }
+
+    const submittedAt = responseSk.startsWith('RESPONSE#') ? responseSk.slice('RESPONSE#'.length).split('#')[0] : '';
+    const responseId = responseSk.includes('#') ? responseSk.split('#').slice(2).join('#') : '';
+    return {
+      id: responseId || 'archived',
+      clientResponseId,
+      surveyId,
+      tenantId: lockItem?.tenantId ?? '',
+      answers: {},
+      submittedAt: submittedAt || new Date().toISOString(),
+      metadata: {
+        archived: true,
+        archivedAt: lockItem?.archivedAt
+      }
+    };
   }
 
-  private async ensureInterviewerPolicy(
+  private resolveInterviewerAssignment(
     survey: CustomerSurvey,
     interviewerId: string | undefined,
     submittedAt: Date
-  ): Promise<void> {
+  ): SurveyInterviewerAssignment | null {
     const assignments = this.getEffectiveInterviewerAssignments(survey);
     if (!assignments.length) {
-      return;
+      return null;
     }
 
     if (!interviewerId) {
@@ -693,15 +1125,17 @@ export class CustomerSurveyRepository {
       if (submittedAt < start || submittedAt > end) {
         continue;
       }
-      const count = await this.countInterviewerResponsesInPeriod(survey.id, interviewerId, start, end);
-      if (count < assignment.maxForms) {
-        return;
+      if (Number(assignment.maxForms) > 0) {
+        return assignment;
       }
     }
     throw new SurveySubmissionError('INTERVIEWER_QUOTA_REACHED', 'Cota de formularios do entrevistador atingida.');
   }
 
-  private async ensureSurveyQuotas(survey: CustomerSurvey, answers: Record<string, unknown>): Promise<void> {
+  private resolveMatchedQuotaRules(
+    survey: CustomerSurvey,
+    answers: Record<string, unknown>
+  ): SurveyQuotaRule[] {
     const rules = (survey.quotaRules ?? []).filter(
       (rule) =>
         Boolean(rule?.questionId) &&
@@ -710,23 +1144,18 @@ export class CustomerSurveyRepository {
         Number(rule.maxResponses) > 0
     );
     if (!rules.length) {
-      return;
+      return [];
     }
 
+    const matched: SurveyQuotaRule[] = [];
     for (const rule of rules) {
       const answer = answers[rule.questionId];
       if (!this.answerContainsOption(answer, rule.optionId)) {
         continue;
       }
-
-      const used = await this.countResponsesByOption(survey.id, rule.questionId, rule.optionId);
-      if (used >= Number(rule.maxResponses)) {
-        throw new SurveySubmissionError(
-          'SURVEY_QUOTA_REACHED',
-          `Quota atingida para "${rule.name}" (${rule.maxResponses}).`
-        );
-      }
+      matched.push(rule);
     }
+    return matched;
   }
 
   private answerContainsOption(answer: unknown, optionId: string): boolean {
@@ -749,42 +1178,6 @@ export class CustomerSurveyRepository {
         periodEnd: wave.periodEnd
       }))
     );
-  }
-
-  private async countInterviewerResponsesInPeriod(
-    surveyId: string,
-    interviewerId: string,
-    start: Date,
-    end: Date
-  ): Promise<number> {
-    let total = 0;
-    let lastEvaluatedKey: Record<string, unknown> | undefined;
-
-    do {
-      const output = await dynamoDbDocumentClient.send(
-        new QueryCommand({
-          TableName: surveysTableName,
-          KeyConditionExpression: 'PK = :pk AND SK BETWEEN :from AND :to',
-          ExpressionAttributeValues: {
-            ':pk': `SURVEY#${surveyId}`,
-            ':from': `RESPONSE#${start.toISOString()}`,
-            ':to': `RESPONSE#${end.toISOString()}~`
-          },
-          ExclusiveStartKey: lastEvaluatedKey
-        })
-      );
-
-      for (const item of output.Items ?? []) {
-        const metadata = (item as SurveyResponseRecord).metadata;
-        if (metadata?.interviewerId === interviewerId) {
-          total += 1;
-        }
-      }
-
-      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
-    } while (lastEvaluatedKey);
-
-    return total;
   }
 
   private async countSurveyResponses(surveyId: string): Promise<number> {
@@ -812,37 +1205,71 @@ export class CustomerSurveyRepository {
     return total;
   }
 
-  private async countResponsesByOption(
+  private async countInterviewerResponsesInPeriod(
     surveyId: string,
-    questionId: string,
-    optionId: string
+    interviewerId: string,
+    start: Date,
+    end: Date
   ): Promise<number> {
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+    const counter = await this.getInterviewerCounterCount(surveyId, interviewerId, startIso, endIso);
+    if (counter > 0) {
+      return counter;
+    }
+
     let total = 0;
     let lastEvaluatedKey: Record<string, unknown> | undefined;
-
     do {
       const output = await dynamoDbDocumentClient.send(
         new QueryCommand({
           TableName: surveysTableName,
-          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+          KeyConditionExpression: 'PK = :pk AND SK BETWEEN :from AND :to',
           ExpressionAttributeValues: {
             ':pk': `SURVEY#${surveyId}`,
-            ':sk': 'RESPONSE#'
+            ':from': `RESPONSE#${startIso}`,
+            ':to': `RESPONSE#${endIso}~`
           },
           ExclusiveStartKey: lastEvaluatedKey
         })
       );
 
       for (const item of output.Items ?? []) {
-        const answers = (item as SurveyResponseRecord).answers ?? {};
-        if (this.answerContainsOption(answers[questionId], optionId)) {
+        const metadata = (item as SurveyResponseRecord).metadata;
+        if (metadata?.interviewerId === interviewerId) {
           total += 1;
         }
       }
-
       lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
     } while (lastEvaluatedKey);
 
     return total;
+  }
+
+  private async getInterviewerCounterCount(
+    surveyId: string,
+    interviewerId: string,
+    periodStart: string,
+    periodEnd: string
+  ): Promise<number> {
+    const output = await dynamoDbDocumentClient.send(
+      new GetCommand({
+        TableName: surveysTableName,
+        Key: interviewerCounterKey(surveyId, interviewerId, periodStart, periodEnd)
+      })
+    );
+    const count = Number(output.Item?.count ?? 0);
+    return Number.isFinite(count) && count >= 0 ? count : 0;
+  }
+
+  private async getQuotaCounterCount(surveyId: string, questionId: string, optionId: string): Promise<number> {
+    const output = await dynamoDbDocumentClient.send(
+      new GetCommand({
+        TableName: surveysTableName,
+        Key: quotaCounterKey(surveyId, questionId, optionId)
+      })
+    );
+    const count = Number(output.Item?.count ?? 0);
+    return Number.isFinite(count) && count >= 0 ? count : 0;
   }
 }

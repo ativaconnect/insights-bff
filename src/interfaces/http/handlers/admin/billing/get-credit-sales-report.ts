@@ -22,7 +22,7 @@ const parseDateOnly = (value?: string | null): string | null => {
 
 const matchesStatus = (status: CreditPurchaseRequestStatus, filter: BillingFilterStatus): boolean => {
   if (filter === 'ALL') return true;
-  if (filter === 'OPEN') return status === 'PENDING';
+  if (filter === 'OPEN') return status === 'PENDING' || status === 'IN_ANALYSIS';
   return status === filter;
 };
 
@@ -42,16 +42,31 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const tenantIdFilter = String(event.queryStringParameters?.tenantId ?? '').trim();
   const productCode = normalizeProductCode(event.queryStringParameters?.productCode);
   const rawStatus = String(event.queryStringParameters?.status ?? 'ALL').trim().toUpperCase();
-  const statusFilter = (rawStatus === 'PENDING' || rawStatus === 'APPROVED' || rawStatus === 'REJECTED' || rawStatus === 'OPEN'
+  const statusFilter = (
+    rawStatus === 'PENDING' ||
+    rawStatus === 'IN_ANALYSIS' ||
+    rawStatus === 'APPROVED' ||
+    rawStatus === 'REJECTED' ||
+    rawStatus === 'OPEN'
     ? rawStatus
     : 'ALL') as BillingFilterStatus;
   const fromDate = parseDateOnly(event.queryStringParameters?.dateFrom);
   const toDate = parseDateOnly(event.queryStringParameters?.dateTo);
 
+  const requestsPromise =
+    statusFilter === 'PENDING' || statusFilter === 'IN_ANALYSIS' || statusFilter === 'APPROVED' || statusFilter === 'REJECTED'
+      ? requestsRepository.listForAdmin(statusFilter, productCode)
+      : statusFilter === 'OPEN'
+        ? Promise.all([
+            requestsRepository.listForAdmin('PENDING', productCode),
+            requestsRepository.listForAdmin('IN_ANALYSIS', productCode)
+          ]).then(([pending, inAnalysis]) => [...pending, ...inAnalysis])
+        : requestsRepository.listForAdmin(undefined, productCode);
+
   const [customers, plans, requests] = await Promise.all([
     adminRepository.listCustomers(),
     adminRepository.listPlanDefinitions(productCode),
-    requestsRepository.listForAdmin(undefined, productCode)
+    requestsPromise
   ]);
 
   const tenantNameMap = new Map(customers.map((customer) => [customer.tenantId, customer.tradeName || customer.legalName]));
@@ -94,6 +109,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     totalRequests: items.length,
     approvedRequests: items.filter((item) => item.status === 'APPROVED').length,
     pendingRequests: items.filter((item) => item.status === 'PENDING').length,
+    inAnalysisRequests: items.filter((item) => item.status === 'IN_ANALYSIS').length,
     rejectedRequests: items.filter((item) => item.status === 'REJECTED').length,
     approvedRevenue: Number(
       items
@@ -104,6 +120,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     openRevenue: Number(
       items
         .filter((item) => item.status === 'PENDING')
+        .concat(items.filter((item) => item.status === 'IN_ANALYSIS'))
         .reduce((acc, item) => acc + item.estimatedAmount, 0)
         .toFixed(2)
     )
@@ -123,7 +140,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       if (item.status === 'APPROVED') {
         current.approvedRevenue = Number((current.approvedRevenue + item.estimatedAmount).toFixed(2));
       }
-      if (item.status === 'PENDING') {
+      if (item.status === 'PENDING' || item.status === 'IN_ANALYSIS') {
         current.openRevenue = Number((current.openRevenue + item.estimatedAmount).toFixed(2));
       }
       acc.set(key, current);

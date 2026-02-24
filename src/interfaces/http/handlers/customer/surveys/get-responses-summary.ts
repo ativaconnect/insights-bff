@@ -23,5 +23,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   if (!snapshot) {
     return fail(404, 'Pesquisa nao encontrada.');
   }
-  return ok(snapshot.heatmap);
+
+  return ok({
+    surveyId: snapshot.surveyId,
+    responsesCount: snapshot.responsesCount,
+    sourceUpdatedAt: snapshot.sourceUpdatedAt,
+    generatedAt: snapshot.generatedAt
+  });
 };

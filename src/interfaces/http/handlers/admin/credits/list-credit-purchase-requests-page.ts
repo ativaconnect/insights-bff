@@ -17,6 +17,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
   const rawStatus = event.queryStringParameters?.status;
   const productCode = normalizeProductCode(event.queryStringParameters?.productCode);
+  const limitRaw = Number(event.queryStringParameters?.limit ?? 50);
+  const cursor = event.queryStringParameters?.cursor;
+
   const normalized = rawStatus?.trim().toUpperCase();
   const allowed =
     normalized === 'PENDING' ||
@@ -25,6 +28,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     normalized === 'REJECTED';
   const status = (allowed ? normalized : undefined) as CreditPurchaseRequestStatus | undefined;
 
-  const requests = await repository.listForAdmin(status, productCode);
-  return ok(requests);
+  const page = await repository.listForAdminPage({
+    status,
+    productCode,
+    limit: limitRaw,
+    cursor
+  });
+
+  return ok(page);
 };
+

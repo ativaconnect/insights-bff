@@ -30,7 +30,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
   const [suppliers, expenses, forecasts] = await Promise.all([
     repository.listSuppliers(),
-    repository.listExpenses(),
+    month ? repository.listExpensesByMonth(month) : repository.listExpenses(),
     repository.listForecastMonths()
   ]);
   const templates = await repository.listRecurringTemplates();

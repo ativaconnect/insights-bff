@@ -4,8 +4,16 @@ import { AdminOwnerRepository } from './admin-owner.repository';
 import { dynamoDbDocumentClient, billingTableName } from './dynamo-client';
 import { TenantSubscriptionRepository } from './tenant-subscription.repository';
 import { DEFAULT_PRODUCT_CODE, normalizeProductCode } from '../../../shared/products';
+import {
+  normalizePaymentChargeStatus,
+  normalizePaymentMethod,
+  normalizePaymentProvider,
+  type PaymentChargeStatus,
+  type PaymentMethodCode,
+  type PaymentProviderCode
+} from '../../../shared/payments';
 
-export type CreditPurchaseRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type CreditPurchaseRequestStatus = 'PENDING' | 'IN_ANALYSIS' | 'APPROVED' | 'REJECTED';
 
 interface CreditPurchaseRequestRecord {
   PK: string;
@@ -22,6 +30,16 @@ interface CreditPurchaseRequestRecord {
   requestedPricePerForm?: number;
   estimatedAmount?: number;
   status: CreditPurchaseRequestStatus;
+  paymentProvider?: PaymentProviderCode;
+  paymentMethod?: PaymentMethodCode;
+  paymentStatus?: PaymentChargeStatus;
+  paymentChargeId?: string;
+  paymentCheckoutUrl?: string;
+  paymentPixQrCode?: string;
+  paymentPixCopyPaste?: string;
+  paymentFailureReason?: string;
+  paymentUpdatedAt?: string;
+  paymentRaw?: Record<string, unknown>;
   note?: string;
   requestedAt: string;
   reviewedAt?: string;
@@ -53,6 +71,15 @@ export interface CreditPurchaseRequest {
   requestedPricePerForm?: number;
   estimatedAmount?: number;
   status: CreditPurchaseRequestStatus;
+  paymentProvider?: PaymentProviderCode;
+  paymentMethod?: PaymentMethodCode;
+  paymentStatus?: PaymentChargeStatus;
+  paymentChargeId?: string;
+  paymentCheckoutUrl?: string;
+  paymentPixQrCode?: string;
+  paymentPixCopyPaste?: string;
+  paymentFailureReason?: string;
+  paymentUpdatedAt?: string;
   note?: string;
   requestedAt: string;
   reviewedAt?: string;
@@ -67,6 +94,23 @@ export interface CreditPurchaseRequest {
 
 const requestLockKey = (requestId: string) => ({ PK: `CREDIT_REQUEST#${requestId}`, SK: 'LOCK' as const });
 const tenantRequestPk = (tenantId: string) => `TENANT#${tenantId}`;
+const chargeLookupPk = (provider: PaymentProviderCode, chargeId: string) =>
+  `PAYMENT_CHARGE#${normalizePaymentProvider(provider)}#${String(chargeId).trim()}`;
+
+const encodeCursor = (value: Record<string, unknown> | undefined): string | undefined => {
+  if (!value) return undefined;
+  return Buffer.from(JSON.stringify(value), 'utf-8').toString('base64');
+};
+
+const decodeCursor = (value: string | undefined): Record<string, unknown> | undefined => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(Buffer.from(raw, 'base64').toString('utf-8')) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+};
 
 export class CreditPurchaseRequestRepository {
   private readonly plans = new AdminOwnerRepository();
@@ -78,6 +122,14 @@ export class CreditPurchaseRequestRepository {
     productCode?: string;
     requestedPlanCode: string;
     requestedCredits: number;
+    paymentProvider?: PaymentProviderCode;
+    paymentMethod?: PaymentMethodCode;
+    paymentStatus?: PaymentChargeStatus;
+    paymentChargeId?: string;
+    paymentCheckoutUrl?: string;
+    paymentPixQrCode?: string;
+    paymentPixCopyPaste?: string;
+    paymentRaw?: Record<string, unknown>;
     note?: string;
   }): Promise<CreditPurchaseRequest> {
     const productCode = normalizeProductCode(input.productCode);
@@ -120,6 +172,15 @@ export class CreditPurchaseRequestRepository {
       requestedPricePerForm,
       estimatedAmount,
       status: 'PENDING',
+      paymentProvider: input.paymentProvider ? normalizePaymentProvider(input.paymentProvider) : undefined,
+      paymentMethod: input.paymentMethod ? normalizePaymentMethod(input.paymentMethod) : undefined,
+      paymentStatus: input.paymentStatus ? normalizePaymentChargeStatus(input.paymentStatus) : undefined,
+      paymentChargeId: input.paymentChargeId?.trim() || undefined,
+      paymentCheckoutUrl: input.paymentCheckoutUrl?.trim() || undefined,
+      paymentPixQrCode: input.paymentPixQrCode?.trim() || undefined,
+      paymentPixCopyPaste: input.paymentPixCopyPaste?.trim() || undefined,
+      paymentUpdatedAt: input.paymentStatus ? now : undefined,
+      paymentRaw: input.paymentRaw,
       note: input.note?.trim() || undefined,
       requestedAt: now,
       updatedAt: now
@@ -149,7 +210,25 @@ export class CreditPurchaseRequestRepository {
               Item: request,
               ConditionExpression: 'attribute_not_exists(PK) AND attribute_not_exists(SK)'
             }
-          }
+          },
+          ...(request.paymentChargeId && request.paymentProvider
+            ? [
+                {
+                  Put: {
+                    TableName: billingTableName,
+                    Item: {
+                      PK: chargeLookupPk(request.paymentProvider, request.paymentChargeId),
+                      SK: 'REQUEST',
+                      entityType: 'CREDIT_PURCHASE_PAYMENT_LOOKUP',
+                      requestId: request.id,
+                      tenantId: request.tenantId,
+                      requestSk
+                    },
+                    ConditionExpression: 'attribute_not_exists(PK)'
+                  }
+                }
+              ]
+            : [])
         ]
       })
     );
@@ -159,18 +238,26 @@ export class CreditPurchaseRequestRepository {
 
   async listByTenant(tenantId: string, productCode: string = DEFAULT_PRODUCT_CODE): Promise<CreditPurchaseRequest[]> {
     const normalizedProduct = normalizeProductCode(productCode);
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: billingTableName,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
-        ExpressionAttributeValues: {
-          ':pk': tenantRequestPk(tenantId),
-          ':skPrefix': 'CREDIT_REQUEST#'
-        }
-      })
-    );
+    const items: CreditPurchaseRequestRecord[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    const items = (output.Items ?? []) as CreditPurchaseRequestRecord[];
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: billingTableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+          ExpressionAttributeValues: {
+            ':pk': tenantRequestPk(tenantId),
+            ':skPrefix': 'CREDIT_REQUEST#'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+
+      items.push(...((output.Items ?? []) as CreditPurchaseRequestRecord[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
     return items
       .map((item) => this.mapRecord(item))
       .filter((item) => normalizeProductCode(item.productCode) === normalizedProduct)
@@ -190,20 +277,66 @@ export class CreditPurchaseRequestRepository {
       expressionValues[':statusPrefix'] = `${normalizedStatus}#`;
     }
 
+    const items: CreditPurchaseRequestRecord[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: billingTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: keyCondition,
+          ExpressionAttributeValues: expressionValues,
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+      items.push(...((output.Items ?? []) as CreditPurchaseRequestRecord[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    return items
+      .map((item) => this.mapRecord(item))
+      .filter((item) => normalizeProductCode(item.productCode) === normalizedProduct)
+      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  }
+
+  async listForAdminPage(input: {
+    status?: CreditPurchaseRequestStatus;
+    productCode?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ items: CreditPurchaseRequest[]; nextCursor?: string }> {
+    const productCode = normalizeProductCode(input.productCode);
+    const normalizedStatus = input.status?.trim().toUpperCase() as CreditPurchaseRequestStatus | undefined;
+    const keyCondition = normalizedStatus
+      ? 'GSI2PK = :pk AND begins_with(GSI2SK, :statusPrefix)'
+      : 'GSI2PK = :pk';
+    const expressionValues: Record<string, string> = {
+      ':pk': 'ENTITY#CREDIT_PURCHASE_REQUEST'
+    };
+    if (normalizedStatus) {
+      expressionValues[':statusPrefix'] = `${normalizedStatus}#`;
+    }
+    const limit = Number.isFinite(input.limit) ? Math.max(1, Math.min(200, Math.floor(Number(input.limit)))) : 50;
+
     const output = await dynamoDbDocumentClient.send(
       new QueryCommand({
         TableName: billingTableName,
         IndexName: 'GSI2',
         KeyConditionExpression: keyCondition,
-        ExpressionAttributeValues: expressionValues
+        ExpressionAttributeValues: expressionValues,
+        Limit: limit,
+        ExclusiveStartKey: decodeCursor(input.cursor)
       })
     );
 
-    const items = (output.Items ?? []) as CreditPurchaseRequestRecord[];
-    return items
+    const items = ((output.Items ?? []) as CreditPurchaseRequestRecord[])
       .map((item) => this.mapRecord(item))
-      .filter((item) => normalizeProductCode(item.productCode) === normalizedProduct)
-      .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+      .filter((item) => normalizeProductCode(item.productCode) === productCode);
+
+    return {
+      items,
+      nextCursor: encodeCursor(output.LastEvaluatedKey as Record<string, unknown> | undefined)
+    };
   }
 
   async approveRequest(
@@ -215,7 +348,7 @@ export class CreditPurchaseRequestRepository {
     if (!record) {
       return null;
     }
-    if (record.status !== 'PENDING') {
+    if (!(record.status === 'PENDING' || record.status === 'IN_ANALYSIS')) {
       throw new Error('REQUEST_NOT_PENDING');
     }
 
@@ -233,6 +366,7 @@ export class CreditPurchaseRequestRepository {
     const updated: CreditPurchaseRequestRecord = {
       ...record,
       status: 'APPROVED',
+      paymentStatus: 'PAID',
       GSI2SK: `APPROVED#${record.requestedAt}#${record.tenantId}#${record.id}`,
       reviewedAt: now,
       reviewedBy: approverUserId,
@@ -248,12 +382,13 @@ export class CreditPurchaseRequestRepository {
       new PutCommand({
         TableName: billingTableName,
         Item: updated,
-        ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK) AND #status = :pending',
+        ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK) AND (#status = :pending OR #status = :analysis)',
         ExpressionAttributeNames: {
           '#status': 'status'
         },
         ExpressionAttributeValues: {
-          ':pending': 'PENDING'
+          ':pending': 'PENDING',
+          ':analysis': 'IN_ANALYSIS'
         }
       })
     );
@@ -270,7 +405,7 @@ export class CreditPurchaseRequestRepository {
     if (!record) {
       return null;
     }
-    if (record.status !== 'PENDING') {
+    if (!(record.status === 'PENDING' || record.status === 'IN_ANALYSIS')) {
       throw new Error('REQUEST_NOT_PENDING');
     }
 
@@ -278,6 +413,8 @@ export class CreditPurchaseRequestRepository {
     const updated: CreditPurchaseRequestRecord = {
       ...record,
       status: 'REJECTED',
+      paymentStatus: 'FAILED',
+      paymentFailureReason: reviewNote?.trim() || undefined,
       GSI2SK: `REJECTED#${record.requestedAt}#${record.tenantId}#${record.id}`,
       reviewedAt: now,
       reviewedBy: approverUserId,
@@ -289,13 +426,95 @@ export class CreditPurchaseRequestRepository {
       new PutCommand({
         TableName: billingTableName,
         Item: updated,
-        ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK) AND #status = :pending',
+        ConditionExpression: 'attribute_exists(PK) AND attribute_exists(SK) AND (#status = :pending OR #status = :analysis)',
         ExpressionAttributeNames: {
           '#status': 'status'
         },
         ExpressionAttributeValues: {
-          ':pending': 'PENDING'
+          ':pending': 'PENDING',
+          ':analysis': 'IN_ANALYSIS'
         }
+      })
+    );
+
+    return this.mapRecord(updated);
+  }
+
+  async attachPaymentCharge(
+    requestId: string,
+    payment: {
+      provider: PaymentProviderCode;
+      method: PaymentMethodCode;
+      chargeId: string;
+      status: PaymentChargeStatus;
+      checkoutUrl?: string;
+      pixQrCode?: string;
+      pixCopyPaste?: string;
+      raw?: Record<string, unknown>;
+    }
+  ): Promise<CreditPurchaseRequest | null> {
+    const record = await this.getRecordById(requestId);
+    if (!record) {
+      return null;
+    }
+    if (!(record.status === 'PENDING' || record.status === 'IN_ANALYSIS')) {
+      return this.mapRecord(record);
+    }
+
+    const now = new Date().toISOString();
+    const provider = normalizePaymentProvider(payment.provider);
+    const chargeId = String(payment.chargeId ?? '').trim();
+    if (!chargeId) {
+      throw new Error('PAYMENT_CHARGE_REQUIRED');
+    }
+
+    const updated: CreditPurchaseRequestRecord = {
+      ...record,
+      paymentProvider: provider,
+      paymentMethod: normalizePaymentMethod(payment.method),
+      paymentChargeId: chargeId,
+      paymentStatus: normalizePaymentChargeStatus(payment.status),
+      paymentCheckoutUrl: payment.checkoutUrl?.trim() || undefined,
+      paymentPixQrCode: payment.pixQrCode?.trim() || undefined,
+      paymentPixCopyPaste: payment.pixCopyPaste?.trim() || undefined,
+      paymentUpdatedAt: now,
+      paymentRaw: payment.raw,
+      updatedAt: now
+    };
+
+    await dynamoDbDocumentClient.send(
+      new TransactWriteCommand({
+        TransactItems: [
+          {
+            Put: {
+              TableName: billingTableName,
+              Item: updated,
+              ConditionExpression:
+                'attribute_exists(PK) AND attribute_exists(SK) AND (#status = :pending OR #status = :analysis)',
+              ExpressionAttributeNames: {
+                '#status': 'status'
+              },
+              ExpressionAttributeValues: {
+                ':pending': 'PENDING',
+                ':analysis': 'IN_ANALYSIS'
+              }
+            }
+          },
+          {
+            Put: {
+              TableName: billingTableName,
+              Item: {
+                PK: chargeLookupPk(provider, chargeId),
+                SK: 'REQUEST',
+                entityType: 'CREDIT_PURCHASE_PAYMENT_LOOKUP',
+                requestId: updated.id,
+                tenantId: updated.tenantId,
+                requestSk: updated.SK
+              },
+              ConditionExpression: 'attribute_not_exists(PK)'
+            }
+          }
+        ]
       })
     );
 
@@ -338,6 +557,15 @@ export class CreditPurchaseRequestRepository {
       requestedPricePerForm: Number(item.requestedPricePerForm ?? 0),
       estimatedAmount: Number(item.estimatedAmount ?? 0),
       status: item.status,
+      paymentProvider: item.paymentProvider ? normalizePaymentProvider(item.paymentProvider) : undefined,
+      paymentMethod: item.paymentMethod ? normalizePaymentMethod(item.paymentMethod) : undefined,
+      paymentStatus: item.paymentStatus ? normalizePaymentChargeStatus(item.paymentStatus) : undefined,
+      paymentChargeId: item.paymentChargeId,
+      paymentCheckoutUrl: item.paymentCheckoutUrl,
+      paymentPixQrCode: item.paymentPixQrCode,
+      paymentPixCopyPaste: item.paymentPixCopyPaste,
+      paymentFailureReason: item.paymentFailureReason,
+      paymentUpdatedAt: item.paymentUpdatedAt,
       note: item.note,
       requestedAt: item.requestedAt,
       reviewedAt: item.reviewedAt,
@@ -351,29 +579,121 @@ export class CreditPurchaseRequestRepository {
     };
   }
 
+  async markPaymentStatusByCharge(params: {
+    provider: PaymentProviderCode;
+    chargeId: string;
+    status: PaymentChargeStatus;
+    reason?: string;
+    rawPayload?: Record<string, unknown>;
+  }): Promise<CreditPurchaseRequest | null> {
+    const lookupOutput = await dynamoDbDocumentClient.send(
+      new GetCommand({
+        TableName: billingTableName,
+        Key: {
+          PK: chargeLookupPk(params.provider, params.chargeId),
+          SK: 'REQUEST'
+        }
+      })
+    );
+
+    const requestId = String(lookupOutput.Item?.requestId ?? '').trim();
+    if (!requestId) {
+      return null;
+    }
+
+    const record = await this.getRecordById(requestId);
+    if (!record) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus: CreditPurchaseRequestStatus =
+      params.status === 'PAID'
+        ? 'APPROVED'
+        : params.status === 'FAILED'
+          ? 'REJECTED'
+          : params.status === 'IN_ANALYSIS'
+            ? 'IN_ANALYSIS'
+            : 'PENDING';
+
+    if (record.status === 'APPROVED' || record.status === 'REJECTED') {
+      return this.mapRecord(record);
+    }
+
+    if (nextStatus === 'APPROVED') {
+      return this.approveRequest(record.id, 'payment-webhook', 'Aprovado automaticamente via webhook');
+    }
+
+    const updated: CreditPurchaseRequestRecord = {
+      ...record,
+      status: nextStatus,
+      paymentStatus: params.status,
+      paymentFailureReason: params.reason?.trim() || record.paymentFailureReason,
+      paymentUpdatedAt: now,
+      paymentRaw: params.rawPayload ?? record.paymentRaw,
+      ...(nextStatus === 'REJECTED'
+        ? {
+            reviewedAt: now,
+            reviewedBy: 'payment-webhook',
+            reviewNote: params.reason?.trim() || 'Pagamento reprovado via webhook'
+          }
+        : {}),
+      GSI2SK: `${nextStatus}#${record.requestedAt}#${record.tenantId}#${record.id}`,
+      updatedAt: now
+    };
+
+    await dynamoDbDocumentClient.send(
+      new PutCommand({
+        TableName: billingTableName,
+        Item: updated,
+        ConditionExpression:
+          'attribute_exists(PK) AND attribute_exists(SK) AND (#status = :pending OR #status = :analysis)',
+        ExpressionAttributeNames: {
+          '#status': 'status'
+        },
+        ExpressionAttributeValues: {
+          ':pending': 'PENDING',
+          ':analysis': 'IN_ANALYSIS'
+        }
+      })
+    );
+
+    return this.mapRecord(updated);
+  }
+
   private async findPendingByTenant(
     tenantId: string,
     productCode: string = DEFAULT_PRODUCT_CODE
   ): Promise<CreditPurchaseRequestRecord | null> {
     const normalizedProduct = normalizeProductCode(productCode);
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: billingTableName,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
-        ExpressionAttributeValues: {
-          ':pk': tenantRequestPk(tenantId),
-          ':skPrefix': 'CREDIT_REQUEST#'
-        }
-      })
-    );
-
-    const pending = (output.Items ?? []).find((item) => {
-      const typed = item as CreditPurchaseRequestRecord;
-      return (
-        String(typed.status) === 'PENDING' &&
-        normalizeProductCode(typed.productCode) === normalizedProduct
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: billingTableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
+          ExpressionAttributeValues: {
+            ':pk': tenantRequestPk(tenantId),
+            ':skPrefix': 'CREDIT_REQUEST#'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
       );
-    });
-    return (pending as CreditPurchaseRequestRecord | undefined) ?? null;
+
+      const pending = (output.Items ?? []).find((item) => {
+        const typed = item as CreditPurchaseRequestRecord;
+        return (
+          (String(typed.status) === 'PENDING' || String(typed.status) === 'IN_ANALYSIS') &&
+          normalizeProductCode(typed.productCode) === normalizedProduct
+        );
+      });
+      if (pending) {
+        return pending as CreditPurchaseRequestRecord;
+      }
+
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    return null;
   }
 }

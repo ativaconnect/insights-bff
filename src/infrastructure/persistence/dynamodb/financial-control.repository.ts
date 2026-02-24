@@ -158,18 +158,26 @@ const addMonthsToDate = (dateOnly: string, monthsToAdd: number): string => {
 
 export class FinancialControlRepository {
   async listSuppliers(): Promise<FinancialSupplier[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: financeTableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': 'ENTITY#FIN_SUPPLIER'
-        }
-      })
-    );
+    const items: FinancialSupplier[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    const items = (output.Items ?? []) as FinancialSupplier[];
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: financeTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: 'GSI2PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'ENTITY#FIN_SUPPLIER'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+
+      items.push(...((output.Items ?? []) as FinancialSupplier[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
     return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
@@ -267,18 +275,71 @@ export class FinancialControlRepository {
   }
 
   async listExpenses(): Promise<FinancialExpense[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: financeTableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': 'ENTITY#FIN_EXPENSE'
-        }
-      })
-    );
+    const items: FinancialExpense[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    const items = (output.Items ?? []) as FinancialExpense[];
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: financeTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: 'GSI2PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'ENTITY#FIN_EXPENSE'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+      items.push(...((output.Items ?? []) as FinancialExpense[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    return items.sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
+  }
+
+  async listExpensesByMonth(
+    month: string,
+    status?: FinancialExpenseStatus
+  ): Promise<FinancialExpense[]> {
+    const normalizedMonth = normalizeMonth(month);
+    const normalizedStatus = status?.trim().toUpperCase() as FinancialExpenseStatus | undefined;
+    const keyCondition = normalizedStatus
+      ? 'GSI3PK = :pk AND begins_with(GSI3SK, :skPrefix)'
+      : 'GSI3PK = :pk';
+    const expressionValues: Record<string, string> = {
+      ':pk': `FIN_EXPENSE#MONTH#${normalizedMonth}`
+    };
+    if (normalizedStatus) {
+      expressionValues[':skPrefix'] = `${normalizedStatus}#`;
+    }
+
+    const items: FinancialExpense[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+    try {
+      do {
+        const output = await dynamoDbDocumentClient.send(
+          new QueryCommand({
+            TableName: financeTableName,
+            IndexName: 'GSI3',
+            KeyConditionExpression: keyCondition,
+            ExpressionAttributeValues: expressionValues,
+            ExclusiveStartKey: lastEvaluatedKey
+          })
+        );
+        items.push(...((output.Items ?? []) as FinancialExpense[]));
+        lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } while (lastEvaluatedKey);
+    } catch {
+      // Backward compatibility for environments where GSI3 is not deployed yet.
+      const fallback = await this.listExpenses();
+      return fallback.filter((item) => {
+        if (normalizeMonth(item.competenceMonth) !== normalizedMonth) return false;
+        if (normalizedStatus && item.status !== normalizedStatus) return false;
+        return true;
+      });
+    }
+
     return items.sort((a, b) => b.occurredOn.localeCompare(a.occurredOn));
   }
 
@@ -345,6 +406,8 @@ export class FinancialControlRepository {
           ...expenseKey(id),
           GSI2PK: 'ENTITY#FIN_EXPENSE',
           GSI2SK: `${expense.occurredOn}#${id}`,
+          GSI3PK: `FIN_EXPENSE#MONTH#${expense.competenceMonth}`,
+          GSI3SK: `${expense.status}#${expense.occurredOn}#${id}`,
           entityType: 'FIN_EXPENSE',
           ...expense
         },
@@ -401,6 +464,8 @@ export class FinancialControlRepository {
           ...expenseKey(expenseId),
           GSI2PK: 'ENTITY#FIN_EXPENSE',
           GSI2SK: `${next.occurredOn}#${expenseId}`,
+          GSI3PK: `FIN_EXPENSE#MONTH#${next.competenceMonth}`,
+          GSI3SK: `${next.status}#${next.occurredOn}#${expenseId}`,
           entityType: 'FIN_EXPENSE',
           ...next
         }
@@ -411,17 +476,25 @@ export class FinancialControlRepository {
   }
 
   async listRecurringTemplates(): Promise<FinancialRecurringTemplate[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: financeTableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': 'ENTITY#FIN_TEMPLATE'
-        }
-      })
-    );
-    const items = (output.Items ?? []) as FinancialRecurringTemplate[];
+    const items: FinancialRecurringTemplate[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: financeTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: 'GSI2PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'ENTITY#FIN_TEMPLATE'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+      items.push(...((output.Items ?? []) as FinancialRecurringTemplate[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
     return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
@@ -673,18 +746,25 @@ export class FinancialControlRepository {
   }
 
   async listForecastMonths(): Promise<FinancialForecastMonth[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: financeTableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': 'ENTITY#FIN_FORECAST'
-        }
-      })
-    );
+    const items: FinancialForecastMonth[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    const items = (output.Items ?? []) as FinancialForecastMonth[];
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: financeTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: 'GSI2PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'ENTITY#FIN_FORECAST'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+      items.push(...((output.Items ?? []) as FinancialForecastMonth[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
     return items.sort((a, b) => b.month.localeCompare(a.month));
   }
 

@@ -11,6 +11,8 @@ export interface AdminTenantSummary {
   email: string;
   phone: string;
   personType: 'PF' | 'PJ';
+  planCode?: string;
+  questionnaireCreditsBalance?: number;
   createdAt: string;
 }
 
@@ -91,18 +93,7 @@ export class AdminOwnerRepository {
   }
 
   async listCustomers(): Promise<AdminTenantSummary[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: customersTableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': 'ENTITY#TENANT'
-        }
-      })
-    );
-
-    const items = (output.Items ?? []) as Array<{
+    const items: Array<{
       id: string;
       legalName: string;
       tradeName?: string;
@@ -110,8 +101,39 @@ export class AdminOwnerRepository {
       email: string;
       phone: string;
       personType: 'PF' | 'PJ';
+      planCode?: string;
+      questionnaireCreditsBalance?: number;
       createdAt: string;
-    }>;
+    }> = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: customersTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: 'GSI2PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'ENTITY#TENANT'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+
+      items.push(...((output.Items ?? []) as Array<{
+        id: string;
+        legalName: string;
+        tradeName?: string;
+        document: string;
+        email: string;
+        phone: string;
+        personType: 'PF' | 'PJ';
+        planCode?: string;
+        questionnaireCreditsBalance?: number;
+        createdAt: string;
+      }>));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
 
     return items
       .map((item) => ({
@@ -122,6 +144,8 @@ export class AdminOwnerRepository {
         email: item.email,
         phone: item.phone,
         personType: item.personType,
+        planCode: item.planCode,
+        questionnaireCreditsBalance: item.questionnaireCreditsBalance,
         createdAt: item.createdAt
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -129,19 +153,27 @@ export class AdminOwnerRepository {
 
   async listPlanDefinitions(productCode: string = DEFAULT_PRODUCT_CODE): Promise<PlanDefinition[]> {
     const normalizedProduct = normalizeProductCode(productCode);
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: plansTableName,
-        IndexName: 'GSI2',
-        KeyConditionExpression: 'GSI2PK = :pk',
-        ExpressionAttributeValues: {
-          ':pk': 'ENTITY#PLAN_DEFINITION'
-        }
-      })
-    );
+    const rawItems: Array<Partial<PlanDefinition>> = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    const items = (output.Items ?? [])
-      .map((item) => this.normalizePlan(item as Partial<PlanDefinition>))
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: plansTableName,
+          IndexName: 'GSI2',
+          KeyConditionExpression: 'GSI2PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'ENTITY#PLAN_DEFINITION'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+      rawItems.push(...((output.Items ?? []) as Array<Partial<PlanDefinition>>));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
+    const items = rawItems
+      .map((item) => this.normalizePlan(item))
       .filter((item) => normalizeProductCode(item.productCode) === normalizedProduct);
     return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
@@ -454,18 +486,26 @@ export class AdminOwnerRepository {
   }
 
   async listPlanAudits(planId: string): Promise<PlanAuditEntry[]> {
-    const output = await dynamoDbDocumentClient.send(
-      new QueryCommand({
-        TableName: plansTableName,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `PLANDEF#${planId}`,
-          ':sk': 'AUDIT#'
-        }
-      })
-    );
+    const items: PlanAuditEntry[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
 
-    const items = (output.Items ?? []) as PlanAuditEntry[];
+    do {
+      const output = await dynamoDbDocumentClient.send(
+        new QueryCommand({
+          TableName: plansTableName,
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+          ExpressionAttributeValues: {
+            ':pk': `PLANDEF#${planId}`,
+            ':sk': 'AUDIT#'
+          },
+          ExclusiveStartKey: lastEvaluatedKey
+        })
+      );
+
+      items.push(...((output.Items ?? []) as PlanAuditEntry[]));
+      lastEvaluatedKey = output.LastEvaluatedKey as Record<string, unknown> | undefined;
+    } while (lastEvaluatedKey);
+
     return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 }

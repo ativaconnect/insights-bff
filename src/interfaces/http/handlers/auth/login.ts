@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { CustomerAccountRepository } from '../../../../infrastructure/persistence/dynamodb/customer-account.repository';
 import { InterviewerRepository } from '../../../../infrastructure/persistence/dynamodb/interviewer.repository';
+import { OwnerAdminUserRepository } from '../../../../infrastructure/persistence/dynamodb/owner-admin-user.repository';
 import { CaptchaVerifierService } from '../../../../infrastructure/security/captcha-verifier.service';
 import { LoginGuardService } from '../../../../infrastructure/security/login-guard.service';
 import { assertConfiguredSecret } from '../../../../infrastructure/security/security-config';
@@ -17,18 +18,14 @@ interface LoginRequest {
 
 const repository = new CustomerAccountRepository();
 const interviewerRepository = new InterviewerRepository();
+const ownerAdminRepository = new OwnerAdminUserRepository();
 const loginGuard = new LoginGuardService();
 const captchaVerifier = new CaptchaVerifierService();
-const appStage = (process.env.APP_STAGE ?? 'local').trim().toLowerCase();
-const defaultAdminUser = (process.env.DEFAULT_ADMIN_USER ?? '').trim().toLowerCase();
-const defaultAdminPassword = (process.env.DEFAULT_ADMIN_PASSWORD ?? '').trim();
-const defaultAdminName = process.env.DEFAULT_ADMIN_NAME ?? 'Admin';
+const defaultAdminUser = (process.env.DEFAULT_ADMIN_USER ?? 'admin@ativaconnect.com.br').trim().toLowerCase();
+const defaultAdminPassword = (process.env.DEFAULT_ADMIN_PASSWORD ?? 'admin123').trim();
+const defaultAdminName = process.env.DEFAULT_ADMIN_NAME ?? 'Administrador Principal';
 const defaultAdminTenantId = process.env.DEFAULT_ADMIN_TENANT_ID ?? 'tenant-owner-admin';
 const jwtSecret = assertConfiguredSecret('JWT_SECRET', process.env.JWT_SECRET, process.env.APP_STAGE);
-
-const isDefaultAdminEnabled = appStage === 'local'
-  ? defaultAdminUser.length > 0 && defaultAdminPassword.length > 0
-  : false;
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const appAuthError = authorizeAppToken(event);
@@ -58,15 +55,25 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return fail(401, 'CAPTCHA invalido.');
     }
 
-    if (isDefaultAdminEnabled && loginId === defaultAdminUser && body.password === defaultAdminPassword) {
+    await ownerAdminRepository.ensureBootstrapAdmin({
+      tenantId: defaultAdminTenantId,
+      name: defaultAdminName,
+      email: defaultAdminUser,
+      password: defaultAdminPassword
+    });
+
+    const ownerAdminSession = await ownerAdminRepository.authenticate(body.email, body.password);
+    if (ownerAdminSession) {
       await loginGuard.registerSuccess(loginId, sourceIp);
       const expiresInSeconds = 2 * 60 * 60;
       const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
       const token = jwt.sign(
         {
-          sub: 'admin-owner',
+          sub: ownerAdminSession.id,
           role: 'ROLE_ADMIN',
-          tenantId: defaultAdminTenantId
+          tenantId: ownerAdminSession.tenantId,
+          adminAccessLevel: ownerAdminSession.accessLevel,
+          adminPermissions: ownerAdminSession.permissions
         },
         jwtSecret,
         { expiresIn: `${expiresInSeconds}s` }
@@ -78,10 +85,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         expiresAt,
         session: {
           role: 'ROLE_ADMIN',
-          userName: defaultAdminName,
+          userName: ownerAdminSession.name,
           tenantName: 'Owner SaaS',
-          tenantId: defaultAdminTenantId,
-          email: defaultAdminUser
+          tenantId: ownerAdminSession.tenantId,
+          email: ownerAdminSession.email,
+          adminAccessLevel: ownerAdminSession.accessLevel,
+          adminPermissions: ownerAdminSession.permissions
         }
       });
     }

@@ -1,9 +1,9 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { SurveyAnalyticsSnapshotService } from '../../../../../infrastructure/analytics/survey-analytics-snapshot.service';
+import { CustomerSurveyRepository } from '../../../../../infrastructure/persistence/dynamodb/customer-survey.repository';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { fail, ok } from '../../../response';
 
-const analytics = new SurveyAnalyticsSnapshotService();
+const repository = new CustomerSurveyRepository();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
@@ -19,9 +19,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'surveyId obrigatorio.');
   }
 
-  const snapshot = await analytics.getSnapshot(auth.tenantId, surveyId);
-  if (!snapshot) {
-    return fail(404, 'Pesquisa nao encontrada.');
-  }
-  return ok(snapshot.heatmap);
+  const limitRaw = Number(event.queryStringParameters?.limit ?? 50);
+  const limit = Number.isFinite(limitRaw) ? limitRaw : 50;
+  const cursor = event.queryStringParameters?.cursor;
+
+  const page = await repository.listResponsesPage(auth.tenantId, surveyId, limit, cursor);
+  return ok(page);
 };
+

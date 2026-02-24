@@ -11,6 +11,7 @@ local:
   jwtSecret: local-dev-secret
   appClientToken: local-app-client-token
   appClientTokenPrevious: ''
+  logLevel: debug
   defaultAdminName: Administrador Principal
   defaultAdminUser: admin@ativaconnect.com.br
   defaultAdminPassword: admin123
@@ -45,6 +46,7 @@ dev:
   jwtSecret: ${env:JWT_SECRET, 'replace-in-dev'}
   appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-dev'}
   appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  logLevel: ${env:LOG_LEVEL_DEV, 'info'}
   defaultAdminName: ${env:DEFAULT_ADMIN_NAME, 'Administrador Principal'}
   defaultAdminUser: ${env:DEFAULT_ADMIN_USER, 'admin@ativaconnect.com.br'}
   defaultAdminPassword: ${env:DEFAULT_ADMIN_PASSWORD, 'admin123'}
@@ -79,6 +81,7 @@ pet:
   jwtSecret: ${env:JWT_SECRET, 'replace-in-pet'}
   appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-pet'}
   appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  logLevel: ${env:LOG_LEVEL_PET, 'info'}
   defaultAdminName: ${env:DEFAULT_ADMIN_NAME, 'Administrador Principal'}
   defaultAdminUser: ${env:DEFAULT_ADMIN_USER, 'admin@ativaconnect.com.br'}
   defaultAdminPassword: ${env:DEFAULT_ADMIN_PASSWORD, 'admin123'}
@@ -113,6 +116,7 @@ prd:
   jwtSecret: ${env:JWT_SECRET, 'replace-in-prd'}
   appClientToken: ${env:APP_CLIENT_TOKEN, 'replace-in-prd'}
   appClientTokenPrevious: ${env:APP_CLIENT_TOKEN_PREVIOUS, ''}
+  logLevel: ${env:LOG_LEVEL_PRD, 'info'}
   defaultAdminName: ${env:DEFAULT_ADMIN_NAME, 'Administrador Principal'}
   defaultAdminUser: ${env:DEFAULT_ADMIN_USER, 'admin@ativaconnect.com.br'}
   defaultAdminPassword: ${env:DEFAULT_ADMIN_PASSWORD, 'admin123'}

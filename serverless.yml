@@ -11,6 +11,8 @@ provider:
   stage: ${opt:stage, 'local'}
   region: ${self:custom.stageConfig.region}
   logRetentionInDays: 30
+  logs:
+    httpApi: true
   stackTags:
     Project: ${self:custom.awsTags.project}
     Application: ${self:custom.awsTags.application}
@@ -73,6 +75,12 @@ provider:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.financeTableName}/index/*
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName}
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${self:custom.stageConfig.surveysTableName}/index/*
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::${self:custom.stageConfig.analyticsSnapshotS3Bucket}/*
   environment:
     APP_STAGE: ${sls:stage}
     JWT_SECRET: ${self:custom.stageConfig.jwtSecret}
@@ -84,6 +92,7 @@ provider:
     DYNAMODB_ENDPOINT: ${self:custom.stageConfig.dynamoEndpoint}
     APP_CLIENT_TOKEN: ${self:custom.stageConfig.appClientToken}
     APP_CLIENT_TOKEN_PREVIOUS: ${self:custom.stageConfig.appClientTokenPrevious, ''}
+    LOG_LEVEL: ${self:custom.stageConfig.logLevel, 'info'}
     DEFAULT_ADMIN_NAME: ${self:custom.stageConfig.defaultAdminName, ''}
     DEFAULT_ADMIN_USER: ${self:custom.stageConfig.defaultAdminUser, ''}
     DEFAULT_ADMIN_PASSWORD: ${self:custom.stageConfig.defaultAdminPassword, ''}

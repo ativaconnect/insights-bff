@@ -28,10 +28,13 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const fromDate = String(event.queryStringParameters?.dateFrom ?? '').trim() || undefined;
   const toDate = String(event.queryStringParameters?.dateTo ?? '').trim() || undefined;
   const supplierId = String(event.queryStringParameters?.supplierId ?? '').trim() || undefined;
+  const month = String(event.queryStringParameters?.month ?? '').trim().slice(0, 7) || undefined;
   const isForecastRaw = String(event.queryStringParameters?.isForecast ?? '').trim().toLowerCase();
   const isForecastFilter = isForecastRaw === 'true' ? true : isForecastRaw === 'false' ? false : undefined;
 
-  const all = await repository.listExpenses();
+  const all = month
+    ? await repository.listExpensesByMonth(month, statusFilter ? statusFilter as FinancialExpenseStatus : undefined)
+    : await repository.listExpenses();
   const filtered = all.filter((item: FinancialExpense) => {
     if (statusFilter && item.status !== statusFilter as FinancialExpenseStatus) return false;
     if (typeFilter && item.type !== typeFilter as FinancialExpenseType) return false;

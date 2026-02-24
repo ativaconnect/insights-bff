@@ -1,12 +1,10 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { AdminOwnerRepository } from '../../../../../infrastructure/persistence/dynamodb/admin-owner.repository';
-import { TenantSubscriptionRepository } from '../../../../../infrastructure/persistence/dynamodb/tenant-subscription.repository';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { ok } from '../../../response';
 import { normalizeProductCode } from '../../../../../shared/products';
 
 const repository = new AdminOwnerRepository();
-const subscriptionRepository = new TenantSubscriptionRepository();
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
@@ -15,15 +13,36 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   const productCode = normalizeProductCode(event.queryStringParameters?.productCode);
-  const customers = await repository.listCustomers();
-  const enriched = await Promise.all(
-    customers.map(async (customer) => {
-      const subscription = await subscriptionRepository.getSnapshot(customer.tenantId, productCode);
-      return {
-        ...customer,
-        subscription
-      };
-    })
-  );
+  const [customers, plans] = await Promise.all([
+    repository.listCustomers(),
+    repository.listPlanDefinitions(productCode)
+  ]);
+
+  const planMap = new Map(plans.map((plan) => [String(plan.code).toUpperCase(), plan]));
+  const defaultPlan = planMap.get('START');
+  const enriched = customers.map((customer) => {
+    const chosenPlanCode = String(customer.planCode ?? 'START').toUpperCase();
+    const plan = planMap.get(chosenPlanCode) ?? defaultPlan;
+    const subscription = plan
+      ? {
+          tenantId: customer.tenantId,
+          planCode: plan.code,
+          planName: plan.name,
+          planTier: Number(plan.tier ?? 0),
+          questionnaireCreditsBalance: Number(customer.questionnaireCreditsBalance ?? 0),
+          limits: {
+            maxSurveys: Number(plan.maxSurveys ?? 5),
+            maxQuestionsPerSurvey: Number(plan.maxQuestionsPerSurvey ?? 5),
+            maxResponsesPerSurvey: Number(plan.maxResponsesPerSurvey ?? 15),
+            maxInterviewers: Number(plan.maxInterviewers ?? 1)
+          }
+        }
+      : undefined;
+
+    return {
+      ...customer,
+      subscription
+    };
+  });
   return ok(enriched);
 };
