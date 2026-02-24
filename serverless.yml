@@ -30,17 +30,11 @@ provider:
       allowedHeaders:
         - Authorization
         - Content-Type
-        - content-type
         - X-App-Token
-        - x-app-token
         - X-Amz-Date
-        - x-amz-date
         - X-Amz-Security-Token
-        - x-amz-security-token
         - X-Amz-User-Agent
-        - x-amz-user-agent
         - X-Webhook-Token
-        - x-webhook-token
         - ngrok-skip-browser-warning
       allowedMethods:
         - GET
