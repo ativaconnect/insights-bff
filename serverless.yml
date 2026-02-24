@@ -29,7 +29,6 @@ provider:
         - ${self:custom.stageConfig.corsAllowedOrigin}
       allowedHeaders:
         - Authorization
-        - authorization
         - Content-Type
         - content-type
         - X-App-Token
@@ -306,6 +305,18 @@ functions:
       - httpApi:
           path: /admin/payments/config
           method: put
+  getAdminFrontendSettings:
+    handler: src/interfaces/http/handlers/admin/frontend/get-settings.handler
+    events:
+      - httpApi:
+          path: /admin/frontend/settings
+          method: get
+  upsertAdminFrontendSettings:
+    handler: src/interfaces/http/handlers/admin/frontend/upsert-settings.handler
+    events:
+      - httpApi:
+          path: /admin/frontend/settings
+          method: put
   approveAdminCreditRequest:
     handler: src/interfaces/http/handlers/admin/credits/approve-credit-purchase-request.handler
     events:
@@ -467,6 +478,12 @@ functions:
     events:
       - httpApi:
           path: /plans/catalog
+          method: get
+  getPublicFrontendSettings:
+    handler: src/interfaces/http/handlers/public/frontend/get-settings.handler
+    events:
+      - httpApi:
+          path: /frontend/settings
           method: get
   getHealth:
     handler: src/interfaces/http/handlers/health/get-health.handler

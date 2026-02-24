@@ -50,6 +50,9 @@ const resolveRequiredAdminPermission = (
   if (normalizedPath.startsWith('/admin/payments')) {
     return normalizedMethod === 'GET' ? 'PAYMENTS_CONFIG_READ' : 'PAYMENTS_CONFIG_WRITE';
   }
+  if (normalizedPath.startsWith('/admin/frontend')) {
+    return normalizedMethod === 'GET' ? 'PLANS_READ' : 'PLANS_WRITE';
+  }
   if (normalizedPath.startsWith('/admin/billing')) {
     return 'BILLING_READ';
   }
