@@ -35,7 +35,7 @@ local:
 
 dev:
   region: us-east-1
-  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_DEV, 'https://insigths-dev.ativaconnect.com.br'}
+  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_DEV, 'https://insights-dev.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_DEV, 'insigths.bff-dev.ativaconnect.com.br'}
   customersTableName: insights-customers-dev
   plansTableName: insights-plans-dev
@@ -70,7 +70,7 @@ dev:
 
 pet:
   region: us-east-1
-  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PET, 'https://insigths-pet.ativaconnect.com.br'}
+  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PET, 'https://insights-pet.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_PET, 'insigths.bff-pet.ativaconnect.com.br'}
   customersTableName: insights-customers-pet
   plansTableName: insights-plans-pet
@@ -105,7 +105,7 @@ pet:
 
 prd:
   region: us-east-1
-  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PRD, 'https://insigths.ativaconnect.com.br'}
+  corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PRD, 'https://insights.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_PRD, 'insigths.bff.ativaconnect.com.br'}
   customersTableName: insights-customers-prd
   plansTableName: insights-plans-prd
