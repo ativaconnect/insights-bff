@@ -26,6 +26,14 @@ const hasAdminPermission = (permissions: OwnerAdminPermission[] | undefined, req
   return values.includes(required);
 };
 
+const hasBearerToken = (event: APIGatewayProxyEventV2): boolean => {
+  const header = event.headers.authorization ?? event.headers.Authorization;
+  if (typeof header !== 'string') {
+    return false;
+  }
+  return /^Bearer\s+\S+$/i.test(header.trim());
+};
+
 const normalizePath = (path: string | undefined): string => String(path ?? '').split('?')[0];
 
 const resolveRequiredAdminPermission = (
@@ -70,6 +78,9 @@ export const authorize = (event: APIGatewayProxyEventV2, expectedRole: UserRole 
   const appAuthError = authorizeAppToken(event);
   if (appAuthError) {
     return appAuthError;
+  }
+  if (!hasBearerToken(event)) {
+    return fail(401, 'User token required.');
   }
 
   const authContext = container.security.authenticator.authenticate(event);
