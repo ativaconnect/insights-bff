@@ -6,15 +6,10 @@ import { OwnerAdminUserRepository } from '../../../../infrastructure/persistence
 import { CaptchaVerifierService } from '../../../../infrastructure/security/captcha-verifier.service';
 import { LoginGuardService } from '../../../../infrastructure/security/login-guard.service';
 import { assertConfiguredSecret } from '../../../../infrastructure/security/security-config';
+import { LoginRequestSchema, type LoginRequestDto } from '../../docs/schemas';
 import { authorizeAppToken } from '../../middleware/app-token.middleware';
-import { parseBody } from '../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../request';
 import { fail, ok } from '../../response';
-
-interface LoginRequest {
-  email: string;
-  password: string;
-  captchaToken?: string;
-}
 
 const repository = new CustomerAccountRepository();
 const interviewerRepository = new InterviewerRepository();
@@ -34,10 +29,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
-    const body = parseBody<LoginRequest>(event);
-    if (!body.email || !body.password) {
-      return fail(400, 'Email e senha sao obrigatorios.');
-    }
+    const body = parseBodyWithSchema<LoginRequestDto>(event, LoginRequestSchema);
 
     const loginId = body.email.trim().toLowerCase();
     const sourceIp = event.requestContext.http.sourceIp;
@@ -156,7 +148,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         email: interviewerSession.login
       }
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     return fail(400, 'Nao foi possivel efetuar login.');
   }
 };

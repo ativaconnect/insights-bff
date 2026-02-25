@@ -3,29 +3,10 @@ import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { CustomerAccountRepository } from '../../../../infrastructure/persistence/dynamodb/customer-account.repository';
 import { CaptchaVerifierService } from '../../../../infrastructure/security/captcha-verifier.service';
 import { assertConfiguredSecret } from '../../../../infrastructure/security/security-config';
+import { RegisterRequestSchema, type RegisterRequestDto } from '../../docs/schemas';
 import { authorizeAppToken } from '../../middleware/app-token.middleware';
-import { parseBody } from '../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../request';
 import { fail, ok } from '../../response';
-
-interface RegisterRequest {
-  personType: 'PF' | 'PJ';
-  document: string;
-  legalName: string;
-  tradeName?: string;
-  email: string;
-  phone: string;
-  password: string;
-  captchaToken?: string;
-  address: {
-    cep: string;
-    state: string;
-    city: string;
-    neighborhood: string;
-    street: string;
-    number: string;
-    complement?: string;
-  };
-}
 
 const repository = new CustomerAccountRepository();
 const captchaVerifier = new CaptchaVerifierService();
@@ -38,21 +19,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
-    const body = parseBody<RegisterRequest>(event);
-    if (
-      !body.email ||
-      !body.password ||
-      !body.document ||
-      !body.legalName ||
-      !body.personType ||
-      !body.address?.cep
-    ) {
-      return fail(400, 'Dados obrigatorios ausentes.');
-    }
-
-    if (body.password.length < 6) {
-      return fail(400, 'Senha deve ter ao menos 6 caracteres.');
-    }
+    const body = parseBodyWithSchema<RegisterRequestDto>(event, RegisterRequestSchema);
 
     const captchaToken =
       body.captchaToken ??
@@ -92,6 +59,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       201
     );
   } catch (error: any) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     if (error?.name === 'TransactionCanceledException' || error?.name === 'ConditionalCheckFailedException') {
       return fail(409, 'Email ou CPF/CNPJ ja cadastrado.');
     }

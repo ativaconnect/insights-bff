@@ -1,26 +1,19 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import {
   CustomerSurveyRepository,
-  SurveySubmissionError,
-  type SurveyGeoPoint
+  SurveySubmissionError
 } from '../../../../../infrastructure/persistence/dynamodb/customer-survey.repository';
 import { TenantSubscriptionRepository } from '../../../../../infrastructure/persistence/dynamodb/tenant-subscription.repository';
+import {
+  SubmitSurveyResponseRequestSchema,
+  type SubmitSurveyResponseRequestDto
+} from '../../../docs/schemas';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
-import { parseBody } from '../../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../../request';
 import { fail, ok } from '../../../response';
 
 const repository = new CustomerSurveyRepository();
 const subscriptionRepository = new TenantSubscriptionRepository();
-
-interface SubmitResponseRequest {
-  answers: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-  clientResponseId?: string;
-  submittedAt?: string;
-  interviewerId?: string;
-  deviceId?: string;
-  location?: SurveyGeoPoint;
-}
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, ['ROLE_CUSTOMER', 'ROLE_INTERVIEWER']);
@@ -45,10 +38,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       }
     }
 
-    const body = parseBody<SubmitResponseRequest>(event);
-    if (!body.answers || typeof body.answers !== 'object') {
-      return fail(400, 'answers obrigatorio.');
-    }
+    const body = parseBodyWithSchema<SubmitSurveyResponseRequestDto>(event, SubmitSurveyResponseRequestSchema);
 
     const subscription = await subscriptionRepository.getSnapshot(auth.tenantId);
     if (!subscription) {
@@ -71,6 +61,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     return ok(created, 201);
   } catch (error: unknown) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     if (error instanceof SurveySubmissionError) {
       return fail(422, error.message);
     }

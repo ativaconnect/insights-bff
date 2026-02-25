@@ -9,25 +9,13 @@ import {
   type SurveyQuestion
 } from '../../../../../infrastructure/persistence/dynamodb/customer-survey.repository';
 import { TenantSubscriptionRepository } from '../../../../../infrastructure/persistence/dynamodb/tenant-subscription.repository';
+import { CreateSurveyRequestSchema, type CreateSurveyRequestDto } from '../../../docs/schemas';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
-import { parseBody } from '../../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../../request';
 import { fail, ok } from '../../../response';
 
 const repository = new CustomerSurveyRepository();
 const subscriptionRepository = new TenantSubscriptionRepository();
-
-interface CreateSurveyRequest {
-  name: string;
-  description: string;
-  status?: 'draft' | 'active' | 'archived';
-  audience?: 'B2B' | 'B2C' | 'Mixed';
-  questions?: SurveyQuestion[];
-  quotaRules?: SurveyQuotaRule[];
-  interviewerAssignments?: SurveyInterviewerAssignment[];
-  waves?: SurveyWave[];
-  locationCapture?: SurveyLocationCapture;
-  kioskSettings?: SurveyKioskSettings;
-}
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
@@ -39,10 +27,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
-    const body = parseBody<CreateSurveyRequest>(event);
-    if (!body.name) {
-      return fail(400, 'Nome da pesquisa e obrigatorio.');
-    }
+    const body = parseBodyWithSchema<CreateSurveyRequestDto>(event, CreateSurveyRequestSchema);
 
     const subscription = await subscriptionRepository.getSnapshot(auth.tenantId);
     if (!subscription) {
@@ -80,16 +65,19 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       description: body.description ?? '',
       status: body.status ?? 'draft',
       audience: body.audience,
-      questions: body.questions ?? [],
-      quotaRules: body.quotaRules ?? [],
-      interviewerAssignments: body.interviewerAssignments ?? [],
-      waves: body.waves ?? [],
-      locationCapture: body.locationCapture,
-      kioskSettings: body.kioskSettings
+      questions: (body.questions as SurveyQuestion[] | undefined) ?? [],
+      quotaRules: (body.quotaRules as SurveyQuotaRule[] | undefined) ?? [],
+      interviewerAssignments: (body.interviewerAssignments as SurveyInterviewerAssignment[] | undefined) ?? [],
+      waves: (body.waves as SurveyWave[] | undefined) ?? [],
+      locationCapture: body.locationCapture as SurveyLocationCapture | undefined,
+      kioskSettings: body.kioskSettings as SurveyKioskSettings | undefined
     });
 
     return ok(survey, 201);
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     return fail(400, 'Nao foi possivel criar pesquisa.');
   }
 };

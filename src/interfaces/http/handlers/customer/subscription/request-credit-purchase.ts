@@ -4,18 +4,14 @@ import { CreditPurchaseRequestRepository } from '../../../../../infrastructure/p
 import { PaymentGatewayConfigRepository } from '../../../../../infrastructure/persistence/dynamodb/payment-gateway-config.repository';
 import { PaymentGatewayService } from '../../../../../infrastructure/payments/payment-gateway.service';
 import { normalizePaymentMethod } from '../../../../../shared/payments';
+import {
+  CreditPurchaseRequestInputSchema,
+  type CreditPurchaseRequestInputDto
+} from '../../../docs/schemas';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
-import { parseBody } from '../../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../../request';
 import { fail, ok } from '../../../response';
 import { normalizeProductCode } from '../../../../../shared/products';
-
-interface RequestCreditsBody {
-  productCode?: string;
-  planCode: string;
-  credits: number;
-  paymentMethod?: 'PIX' | 'CREDIT_CARD';
-  note?: string;
-}
 
 const repository = new CreditPurchaseRequestRepository();
 const profileRepository = new CustomerAccountRepository();
@@ -32,10 +28,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
-    const body = parseBody<RequestCreditsBody>(event);
-    if (!body.planCode) {
-      return fail(400, 'planCode obrigatorio.');
-    }
+    const body = parseBodyWithSchema<CreditPurchaseRequestInputDto>(event, CreditPurchaseRequestInputSchema);
 
     const credits = Number(body.credits);
     if (!Number.isInteger(credits) || credits <= 0) {
@@ -95,6 +88,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     return ok(created ?? baseRequest, 201);
   } catch (error: any) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     if (error?.message === 'PLAN_NOT_AVAILABLE') {
       return fail(404, 'Plano nao encontrado ou indisponivel.');
     }

@@ -4,11 +4,11 @@ const resolveSpecUrl = (event: Parameters<APIGatewayProxyHandlerV2>[0]): string 
   const forwardedPrefix = event.headers?.['x-forwarded-prefix'] ?? event.headers?.['X-Forwarded-Prefix'];
   if (forwardedPrefix) {
     const normalized = forwardedPrefix.endsWith('/') ? forwardedPrefix.slice(0, -1) : forwardedPrefix;
-    return `${normalized}/docs/openapi.json`;
+    return `${normalized}./docs/openapi.json`;
   }
 
   // Keep it relative so browser preserves custom domain mappings like /insights/docs.
-  return 'openapi.json';
+  return './docs/openapi.json';
 };
 
 const buildHtml = (specUrl: string): string => `<!doctype html>

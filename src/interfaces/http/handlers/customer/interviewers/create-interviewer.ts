@@ -1,20 +1,16 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { InterviewerRepository } from '../../../../../infrastructure/persistence/dynamodb/interviewer.repository';
 import { TenantSubscriptionRepository } from '../../../../../infrastructure/persistence/dynamodb/tenant-subscription.repository';
+import {
+  CreateInterviewerRequestSchema,
+  type CreateInterviewerRequestDto
+} from '../../../docs/schemas';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
-import { parseBody } from '../../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../../request';
 import { fail, ok } from '../../../response';
 
 const repository = new InterviewerRepository();
 const subscriptionRepository = new TenantSubscriptionRepository();
-
-interface CreateInterviewerRequest {
-  name: string;
-  login: string;
-  password: string;
-  phone?: string;
-  email?: string;
-}
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
@@ -26,13 +22,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
-    const body = parseBody<CreateInterviewerRequest>(event);
-    if (!body.name || !body.login || !body.password) {
-      return fail(400, 'Nome, login e senha sao obrigatorios.');
-    }
-    if (body.password.length < 6) {
-      return fail(400, 'Senha deve ter ao menos 6 caracteres.');
-    }
+    const body = parseBodyWithSchema<CreateInterviewerRequestDto>(event, CreateInterviewerRequestSchema);
 
     const subscription = await subscriptionRepository.getSnapshot(auth.tenantId);
     if (!subscription) {
@@ -53,6 +43,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     return ok(interviewer, 201);
   } catch (error: unknown) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     const errorName = (error as { name?: string }).name;
     if (errorName === 'TransactionCanceledException' || errorName === 'ConditionalCheckFailedException') {
       return fail(409, 'Login de entrevistador ja cadastrado.');

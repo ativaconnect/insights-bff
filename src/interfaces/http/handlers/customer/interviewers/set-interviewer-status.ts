@@ -1,14 +1,14 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { InterviewerRepository } from '../../../../../infrastructure/persistence/dynamodb/interviewer.repository';
+import {
+  SetInterviewerStatusRequestSchema,
+  type SetInterviewerStatusRequestDto
+} from '../../../docs/schemas';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
-import { parseBody } from '../../../request';
+import { parseBodyWithSchema, RequestValidationError } from '../../../request';
 import { fail, ok } from '../../../response';
 
 const repository = new InterviewerRepository();
-
-interface SetStatusRequest {
-  status: 'active' | 'inactive';
-}
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
@@ -25,10 +25,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   try {
-    const body = parseBody<SetStatusRequest>(event);
-    if (body.status !== 'active' && body.status !== 'inactive') {
-      return fail(400, 'Status invalido.');
-    }
+    const body = parseBodyWithSchema<SetInterviewerStatusRequestDto>(event, SetInterviewerStatusRequestSchema);
 
     const updated = await repository.setStatus(auth.tenantId, interviewerId, body.status);
     if (!updated) {
@@ -36,7 +33,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     return ok(updated);
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestValidationError) {
+      return fail(400, error.message);
+    }
     return fail(400, 'Nao foi possivel alterar status do entrevistador.');
   }
 };

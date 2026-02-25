@@ -1,328 +1,378 @@
-type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
+import { OpenAPIRegistry, OpenApiGeneratorV3, extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
+import { z } from 'zod';
+import {
+  CreateInterviewerRequestSchema,
+  CreateSurveyRequestSchema,
+  CreditPurchaseRequestInputSchema,
+  LoginRequestSchema,
+  RegisterRequestSchema,
+  SetInterviewerStatusRequestSchema,
+  SubmitSurveyResponseRequestSchema,
+  SubmitSurveyResponsesBatchRequestSchema,
+  UpdateInterviewerRequestSchema
+} from './schemas';
 
-interface OperationConfig {
-  summary: string;
-  tags: string[];
-  operationId: string;
-  security?: Array<Record<string, string[]>>;
-  parameters?: Array<Record<string, unknown>>;
-  requestBody?: Record<string, unknown>;
-  responses?: Record<string, unknown>;
-}
+extendZodWithOpenApi(z);
 
-const schemaRef = (name: string): Record<string, string> => ({ $ref: `#/components/schemas/${name}` });
-const requestJson = (name: string, required = true): Record<string, unknown> => ({
-  required,
-  content: { 'application/json': { schema: schemaRef(name) } }
-});
-const responseJson = (name: string, description = 'Sucesso'): Record<string, unknown> => ({
-  description,
-  content: { 'application/json': { schema: schemaRef(name) } }
-});
-const responseArray = (name: string, description = 'Sucesso'): Record<string, unknown> => ({
-  description,
-  content: { 'application/json': { schema: { type: 'array', items: schemaRef(name) } } }
-});
-const pathParam = (name: string, description: string): Record<string, unknown> => ({
-  name,
-  in: 'path',
-  required: true,
-  description,
-  schema: { type: 'string' }
-});
-const queryParam = (name: string, description: string, schema: Record<string, unknown> = { type: 'string' }): Record<string, unknown> => ({
-  name,
-  in: 'query',
-  required: false,
-  description,
-  schema
-});
-const errRef = (name: string): Record<string, string> => ({ $ref: `#/components/responses/${name}` });
-const errs = {
-  '400': errRef('BadRequest'),
-  '401': errRef('Unauthorized'),
-  '403': errRef('Forbidden'),
-  '404': errRef('NotFound'),
-  '409': errRef('Conflict'),
-  '422': errRef('UnprocessableEntity')
+const registry = new OpenAPIRegistry();
+
+const ErrorResponse = registry.register(
+  'ErrorResponse',
+  z.object({
+    message: z.string()
+  })
+);
+
+const GenericObject = registry.register('GenericObject', z.record(z.string(), z.unknown()));
+
+const HealthResponse = registry.register(
+  'HealthResponse',
+  z.object({
+    service: z.string(),
+    status: z.enum(['UP', 'DEGRADED']),
+    timestamp: z.string().datetime()
+  })
+);
+
+const RegisterRequest = registry.register(
+  'RegisterRequest',
+  RegisterRequestSchema
+);
+
+const LoginRequest = registry.register(
+  'LoginRequest',
+  LoginRequestSchema
+);
+
+const AuthResponse = registry.register(
+  'AuthResponse',
+  z.object({
+    token: z.string(),
+    expiresInSeconds: z.number().int(),
+    expiresAt: z.string().datetime(),
+    session: z.object({
+      role: z.string(),
+      userName: z.string(),
+      tenantName: z.string(),
+      tenantId: z.string(),
+      email: z.string(),
+      adminAccessLevel: z.string().optional(),
+      adminPermissions: z.array(z.string()).optional()
+    })
+  })
+);
+
+const CreditPurchaseRequestInput = registry.register(
+  'CreditPurchaseRequestInput',
+  CreditPurchaseRequestInputSchema
+);
+
+const CreditPurchaseRequest = registry.register('CreditPurchaseRequest', GenericObject);
+const CreditPurchaseRequestsPage = registry.register(
+  'CreditPurchaseRequestsPage',
+  z.object({ items: z.array(CreditPurchaseRequest), nextCursor: z.string().optional() })
+);
+
+const InterviewerProfile = registry.register(
+  'InterviewerProfile',
+  z.object({
+    id: z.string(),
+    tenantId: z.string(),
+    name: z.string(),
+    login: z.string(),
+    phone: z.string().optional(),
+    email: z.string().optional(),
+    status: z.enum(['active', 'inactive']),
+    createdAt: z.string(),
+    updatedAt: z.string()
+  })
+);
+
+const CreateInterviewerRequest = registry.register(
+  'CreateInterviewerRequest',
+  CreateInterviewerRequestSchema
+);
+
+const UpdateInterviewerRequest = registry.register(
+  'UpdateInterviewerRequest',
+  UpdateInterviewerRequestSchema
+);
+
+const SetInterviewerStatusRequest = registry.register(
+  'SetInterviewerStatusRequest',
+  SetInterviewerStatusRequestSchema
+);
+
+const DeleteFlagResponse = registry.register('DeleteFlagResponse', z.object({ deleted: z.boolean() }));
+
+const CustomerSurvey = registry.register('CustomerSurvey', GenericObject);
+const CreateSurveyRequest = registry.register('CreateSurveyRequest', CreateSurveyRequestSchema);
+const UpdateSurveyRequest = registry.register('UpdateSurveyRequest', z.record(z.string(), z.unknown()));
+const SurveyResponseRecord = registry.register('SurveyResponseRecord', GenericObject);
+const SubmitSurveyResponseRequest = registry.register(
+  'SubmitSurveyResponseRequest',
+  SubmitSurveyResponseRequestSchema
+);
+const SubmitSurveyResponsesBatchRequest = registry.register(
+  'SubmitSurveyResponsesBatchRequest',
+  SubmitSurveyResponsesBatchRequestSchema
+);
+const SubmitBatchResponse = registry.register('SubmitBatchResponse', z.object({ accepted: z.number().int(), responses: z.array(SurveyResponseRecord) }));
+const CursorSurveyResponsesPage = registry.register('CursorSurveyResponsesPage', z.object({ items: z.array(SurveyResponseRecord), nextCursor: z.string().optional() }));
+
+const UpdateMeRequest = registry.register('UpdateMeRequest', z.record(z.string(), z.unknown()));
+const CustomerProfile = registry.register('CustomerProfile', GenericObject);
+
+const ApproveRejectCreditRequest = registry.register('ApproveRejectCreditRequest', z.object({ note: z.string().optional() }));
+const PaymentGatewayConfig = registry.register('PaymentGatewayConfig', GenericObject);
+const UpsertPaymentConfigRequest = registry.register('UpsertPaymentConfigRequest', z.object({ provider: z.string() }).catchall(z.unknown()));
+const PlanDefinition = registry.register('PlanDefinition', GenericObject);
+const PlanAuditEntry = registry.register('PlanAuditEntry', GenericObject);
+const CreatePlanRequest = registry.register('CreatePlanRequest', z.object({ code: z.string(), name: z.string(), tier: z.number(), pricePerForm: z.number(), minForms: z.number().int(), maxSurveys: z.number().int(), maxQuestionsPerSurvey: z.number().int(), maxResponsesPerSurvey: z.number().int(), maxInterviewers: z.number().int() }).catchall(z.unknown()));
+const UpdatePlanRequest = registry.register('UpdatePlanRequest', z.object({ name: z.string(), tier: z.number(), pricePerForm: z.number(), minForms: z.number().int(), maxSurveys: z.number().int(), maxQuestionsPerSurvey: z.number().int(), maxResponsesPerSurvey: z.number().int(), maxInterviewers: z.number().int(), active: z.boolean() }).catchall(z.unknown()));
+
+const OwnerAdminUser = registry.register('OwnerAdminUser', GenericObject);
+const CreateAdminUserRequest = registry.register('CreateAdminUserRequest', z.object({ name: z.string(), email: z.string(), password: z.string().min(6), accessLevel: z.string() }).catchall(z.unknown()));
+const UpdateAdminUserRequest = registry.register('UpdateAdminUserRequest', z.record(z.string(), z.unknown()));
+
+const FinancialSupplier = registry.register('FinancialSupplier', GenericObject);
+const CreateSupplierRequest = registry.register('CreateSupplierRequest', z.object({ name: z.string() }).catchall(z.unknown()));
+const UpdateSupplierRequest = registry.register('UpdateSupplierRequest', z.record(z.string(), z.unknown()));
+const FinancialExpense = registry.register('FinancialExpense', GenericObject);
+const CreateExpenseRequest = registry.register('CreateExpenseRequest', z.object({ occurredOn: z.string(), description: z.string(), type: z.string(), category: z.string(), amount: z.number() }).catchall(z.unknown()));
+const UpdateExpenseRequest = registry.register('UpdateExpenseRequest', z.record(z.string(), z.unknown()));
+const FinancialForecastMonth = registry.register('FinancialForecastMonth', GenericObject);
+const UpsertForecastRequest = registry.register('UpsertForecastRequest', z.object({ expectedRevenue: z.number(), expectedFixedCosts: z.number(), expectedVariableCosts: z.number() }).catchall(z.unknown()));
+const FinancialRecurringTemplate = registry.register('FinancialRecurringTemplate', GenericObject);
+const CreateRecurringTemplateRequest = registry.register('CreateRecurringTemplateRequest', z.object({ name: z.string(), category: z.string(), type: z.string(), recurringFrequency: z.string(), updateDay: z.number(), requiresValueUpdate: z.boolean(), startMonth: z.string() }).catchall(z.unknown()));
+const UpdateRecurringTemplateRequest = registry.register('UpdateRecurringTemplateRequest', z.record(z.string(), z.unknown()));
+const GenerateRecurringMonthRequest = registry.register('GenerateRecurringMonthRequest', z.object({ month: z.string() }));
+const GenerateRecurringMonthResponse = registry.register('GenerateRecurringMonthResponse', GenericObject);
+const GenerateInstallmentsRequest = registry.register('GenerateInstallmentsRequest', z.object({ description: z.string(), category: z.string(), type: z.string(), totalAmount: z.number(), installments: z.number().int().positive(), firstDueOn: z.string() }).catchall(z.unknown()));
+const GenerateInstallmentsResponse = registry.register('GenerateInstallmentsResponse', GenericObject);
+
+const FrontendSettings = registry.register('FrontendSettings', GenericObject);
+const UpsertFrontendSettingsRequest = registry.register('UpsertFrontendSettingsRequest', z.record(z.string(), z.unknown()));
+
+const AdminCustomerSummaryEnriched = registry.register('AdminCustomerSummaryEnriched', GenericObject);
+const TenantSubscriptionSnapshot = registry.register('TenantSubscriptionSnapshot', GenericObject);
+const PurchaseCustomerCreditsRequest = registry.register('PurchaseCustomerCreditsRequest', z.object({ planCode: z.string(), productCode: z.string().optional(), credits: z.number().int().positive().optional() }));
+
+const BillingCreditSalesReport = registry.register('BillingCreditSalesReport', GenericObject);
+const FinancialOverview = registry.register('FinancialOverview', GenericObject);
+
+const WebhookResponse = registry.register(
+  'WebhookResponse',
+  z.object({ accepted: z.boolean(), updated: z.boolean(), reason: z.string().optional(), request: CreditPurchaseRequest.optional() })
+);
+
+const authSec = [{ BearerAuth: [], AppToken: [] }];
+const appTokenSec = [{ AppToken: [] }];
+
+const errResponses: Record<string, any> = {
+  400: { description: 'Requisicao invalida', content: { 'application/json': { schema: ErrorResponse } } },
+  401: { description: 'Nao autorizado', content: { 'application/json': { schema: ErrorResponse } } },
+  403: { description: 'Sem permissao', content: { 'application/json': { schema: ErrorResponse } } },
+  404: { description: 'Nao encontrado', content: { 'application/json': { schema: ErrorResponse } } },
+  409: { description: 'Conflito', content: { 'application/json': { schema: ErrorResponse } } },
+  422: { description: 'Nao processavel', content: { 'application/json': { schema: ErrorResponse } } }
 };
 
-const op = (c: OperationConfig): Record<string, unknown> => ({
-  summary: c.summary,
-  operationId: c.operationId,
-  tags: c.tags,
-  ...(c.security ? { security: c.security } : {}),
-  ...(c.parameters ? { parameters: c.parameters } : {}),
-  ...(c.requestBody ? { requestBody: c.requestBody } : {}),
-  responses: c.responses ?? { '200': responseJson('GenericObject'), ...errs }
-});
-const method = (name: HttpMethod, c: OperationConfig): Record<string, unknown> => ({ [name]: op(c) });
+const addPath = (path: string, method: 'get' | 'post' | 'put' | 'patch' | 'delete', cfg: { summary: string; operationId: string; tags: string[]; security?: Array<Record<string, string[]>>; parameters?: Array<Record<string, unknown>>; requestSchema?: z.ZodTypeAny; requestRequired?: boolean; responseSchema?: z.ZodTypeAny; responseCode?: number; responseArray?: boolean; includeErrors?: boolean; extraResponses?: Record<number, any>; }) => {
+  const responses: Record<string, any> = {
+    [String(cfg.responseCode ?? 200)]: {
+      description: 'Sucesso',
+      content: {
+        'application/json': {
+          schema: cfg.responseArray ? z.array(cfg.responseSchema ?? GenericObject) : (cfg.responseSchema ?? GenericObject)
+        }
+      }
+    },
+    ...(cfg.includeErrors === false ? {} : errResponses),
+    ...(cfg.extraResponses ?? {})
+  };
 
-export const buildOpenApiSpec = (serverUrl: string): Record<string, unknown> => ({
-  openapi: '3.0.3',
-  info: {
-    title: 'Insights BFF API',
-    version: '1.0.0',
-    description: 'Documentacao OpenAPI da API Insights BFF (Serverless).'
-  },
-  servers: [{ url: serverUrl }],
-  tags: [
-    { name: 'Auth' },
-    { name: 'Health' },
-    { name: 'Me' },
-    { name: 'Interviewers' },
-    { name: 'Surveys' },
-    { name: 'Interviewer' },
-    { name: 'Admin Customers' },
-    { name: 'Admin Credits' },
-    { name: 'Admin Payments' },
-    { name: 'Admin Billing' },
-    { name: 'Admin Plans' },
-    { name: 'Admin Users' },
-    { name: 'Admin Finance' },
-    { name: 'Admin Frontend' },
-    { name: 'Public' },
-    { name: 'Integrations' },
-    { name: 'Webhooks' },
-    { name: 'Docs' }
-  ],
-  security: [{ BearerAuth: [], AppToken: [] }],
-  components: {
-    securitySchemes: {
-      BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      AppToken: { type: 'apiKey', in: 'header', name: 'X-App-Token' }
+  registry.registerPath({
+    method,
+    path,
+    summary: cfg.summary,
+    operationId: cfg.operationId,
+    tags: cfg.tags,
+    ...(cfg.security ? { security: cfg.security } : {}),
+    ...(cfg.parameters ? { request: { params: undefined, query: undefined } } : {}),
+    request: {
+      ...(cfg.parameters ? {
+        params: z.object(
+          Object.fromEntries(
+            cfg.parameters
+              .filter((p) => p['in'] === 'path')
+              .map((p) => [String(p.name), z.string()])
+          )
+        ).partial(),
+        query: z.object(
+          Object.fromEntries(
+            cfg.parameters
+              .filter((p) => p['in'] === 'query')
+              .map((p) => [String(p.name), z.union([z.string(), z.number(), z.boolean()]).optional()])
+          )
+        ).partial()
+      } : {}),
+      ...(cfg.requestSchema
+        ? {
+            body: {
+              required: cfg.requestRequired ?? true,
+              content: { 'application/json': { schema: cfg.requestSchema } }
+            }
+          }
+        : {})
     },
-    responses: {
-      BadRequest: { description: 'Requisicao invalida.', content: { 'application/json': { schema: schemaRef('ErrorResponse') } } },
-      Unauthorized: { description: 'Nao autorizado.', content: { 'application/json': { schema: schemaRef('ErrorResponse') } } },
-      Forbidden: { description: 'Sem permissao.', content: { 'application/json': { schema: schemaRef('ErrorResponse') } } },
-      NotFound: { description: 'Nao encontrado.', content: { 'application/json': { schema: schemaRef('ErrorResponse') } } },
-      Conflict: { description: 'Conflito.', content: { 'application/json': { schema: schemaRef('ErrorResponse') } } },
-      UnprocessableEntity: { description: 'Nao processavel.', content: { 'application/json': { schema: schemaRef('ErrorResponse') } } }
-    },
-    schemas: {
-      GenericObject: { type: 'object', additionalProperties: true },
-      ErrorResponse: {
-        type: 'object',
-        required: ['message'],
-        properties: { message: { type: 'string' } }
-      },
-      HealthResponse: {
-        type: 'object',
-        required: ['service', 'status', 'timestamp'],
-        properties: {
-          service: { type: 'string' },
-          status: { type: 'string', enum: ['UP', 'DEGRADED'] },
-          timestamp: { type: 'string', format: 'date-time' }
-        }
-      },
-      RegisterRequest: {
-        type: 'object',
-        required: ['personType', 'document', 'legalName', 'email', 'phone', 'password', 'address'],
-        properties: {
-          personType: { type: 'string', enum: ['PF', 'PJ'] },
-          document: { type: 'string' },
-          legalName: { type: 'string' },
-          tradeName: { type: 'string' },
-          email: { type: 'string' },
-          phone: { type: 'string' },
-          password: { type: 'string', minLength: 6 },
-          captchaToken: { type: 'string' },
-          address: { type: 'object', required: ['cep', 'state', 'city', 'neighborhood', 'street', 'number'], properties: {
-            cep: { type: 'string' }, state: { type: 'string' }, city: { type: 'string' }, neighborhood: { type: 'string' }, street: { type: 'string' }, number: { type: 'string' }, complement: { type: 'string' }
-          } }
-        }
-      },
-      LoginRequest: {
-        type: 'object',
-        required: ['email', 'password'],
-        properties: { email: { type: 'string' }, password: { type: 'string' }, captchaToken: { type: 'string' } }
-      },
-      AuthResponse: {
-        type: 'object',
-        required: ['token', 'expiresInSeconds', 'expiresAt', 'session'],
-        properties: {
-          token: { type: 'string' },
-          expiresInSeconds: { type: 'integer' },
-          expiresAt: { type: 'string', format: 'date-time' },
-          session: { type: 'object', required: ['role', 'userName', 'tenantName', 'tenantId', 'email'], properties: {
-            role: { type: 'string' }, userName: { type: 'string' }, tenantName: { type: 'string' }, tenantId: { type: 'string' }, email: { type: 'string' }, adminAccessLevel: { type: 'string' }, adminPermissions: { type: 'array', items: { type: 'string' } }
-          } }
-        }
-      },
-      CustomerProfile: { type: 'object', additionalProperties: true },
-      CreditPurchaseRequestInput: {
-        type: 'object',
-        required: ['planCode', 'credits'],
-        properties: {
-          productCode: { type: 'string' },
-          planCode: { type: 'string' },
-          credits: { type: 'integer', minimum: 1 },
-          paymentMethod: { type: 'string', enum: ['PIX', 'CREDIT_CARD'] },
-          note: { type: 'string' }
-        }
-      },
-      CreditPurchaseRequest: { type: 'object', additionalProperties: true },
-      CreditPurchaseRequestsPage: {
-        type: 'object',
-        required: ['items'],
-        properties: { items: { type: 'array', items: schemaRef('CreditPurchaseRequest') }, nextCursor: { type: 'string' } }
-      },
-      InterviewerProfile: {
-        type: 'object',
-        required: ['id', 'tenantId', 'name', 'login', 'status', 'createdAt', 'updatedAt'],
-        properties: {
-          id: { type: 'string' }, tenantId: { type: 'string' }, name: { type: 'string' }, login: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive'] }, createdAt: { type: 'string' }, updatedAt: { type: 'string' }
-        }
-      },
-      CreateInterviewerRequest: { type: 'object', required: ['name', 'login', 'password'], properties: { name: { type: 'string' }, login: { type: 'string' }, password: { type: 'string', minLength: 6 }, phone: { type: 'string' }, email: { type: 'string' } } },
-      UpdateInterviewerRequest: { type: 'object', properties: { name: { type: 'string' }, login: { type: 'string' }, password: { type: 'string', minLength: 6 }, phone: { type: 'string' }, email: { type: 'string' } } },
-      SetInterviewerStatusRequest: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['active', 'inactive'] } } },
-      DeleteFlagResponse: { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean' } } },
-      CustomerSurvey: { type: 'object', additionalProperties: true },
-      CreateSurveyRequest: { type: 'object', required: ['name'], additionalProperties: true, properties: { name: { type: 'string' } } },
-      UpdateSurveyRequest: { type: 'object', additionalProperties: true },
-      SurveyResponseRecord: { type: 'object', additionalProperties: true },
-      SubmitSurveyResponseRequest: { type: 'object', required: ['answers'], properties: { answers: { type: 'object', additionalProperties: true }, metadata: { type: 'object', additionalProperties: true }, clientResponseId: { type: 'string' }, submittedAt: { type: 'string', format: 'date-time' }, interviewerId: { type: 'string' }, deviceId: { type: 'string' }, location: { type: 'object', properties: { lat: { type: 'number' }, lng: { type: 'number' }, accuracyMeters: { type: 'number' } } } } },
-      SubmitSurveyResponsesBatchRequest: { type: 'object', required: ['responses'], properties: { responses: { type: 'array', items: schemaRef('SubmitSurveyResponseRequest') } } },
-      SubmitBatchResponse: { type: 'object', required: ['accepted', 'responses'], properties: { accepted: { type: 'integer' }, responses: { type: 'array', items: schemaRef('SurveyResponseRecord') } } },
-      CursorSurveyResponsesPage: { type: 'object', required: ['items'], properties: { items: { type: 'array', items: schemaRef('SurveyResponseRecord') }, nextCursor: { type: 'string' } } },
-      SurveyResponsesSummary: { type: 'object', additionalProperties: true },
-      HeatmapPoint: { type: 'object', required: ['lat', 'lng', 'count'], properties: { lat: { type: 'number' }, lng: { type: 'number' }, count: { type: 'integer' } } },
-      PlanDefinition: { type: 'object', additionalProperties: true },
-      PlanAuditEntry: { type: 'object', additionalProperties: true },
-      CreatePlanRequest: { type: 'object', required: ['code', 'name', 'tier', 'pricePerForm', 'minForms', 'maxSurveys', 'maxQuestionsPerSurvey', 'maxResponsesPerSurvey', 'maxInterviewers'], additionalProperties: true },
-      UpdatePlanRequest: { type: 'object', required: ['name', 'tier', 'pricePerForm', 'minForms', 'maxSurveys', 'maxQuestionsPerSurvey', 'maxResponsesPerSurvey', 'maxInterviewers', 'active'], additionalProperties: true },
-      OwnerAdminUser: { type: 'object', additionalProperties: true },
-      CreateAdminUserRequest: { type: 'object', required: ['name', 'email', 'password', 'accessLevel'], additionalProperties: true },
-      UpdateAdminUserRequest: { type: 'object', additionalProperties: true },
-      PaymentGatewayConfig: { type: 'object', additionalProperties: true },
-      UpsertPaymentConfigRequest: { type: 'object', required: ['provider'], additionalProperties: true },
-      AdminCustomerSummaryEnriched: { type: 'object', additionalProperties: true },
-      TenantSubscriptionSnapshot: { type: 'object', additionalProperties: true },
-      PurchaseCustomerCreditsRequest: { type: 'object', required: ['planCode'], properties: { productCode: { type: 'string' }, planCode: { type: 'string' }, credits: { type: 'integer', minimum: 1 } } },
-      FinancialSupplier: { type: 'object', additionalProperties: true },
-      CreateSupplierRequest: { type: 'object', required: ['name'], additionalProperties: true },
-      UpdateSupplierRequest: { type: 'object', additionalProperties: true },
-      FinancialExpense: { type: 'object', additionalProperties: true },
-      CreateExpenseRequest: { type: 'object', required: ['occurredOn', 'description', 'type', 'category', 'amount'], additionalProperties: true },
-      UpdateExpenseRequest: { type: 'object', additionalProperties: true },
-      FinancialForecastMonth: { type: 'object', additionalProperties: true },
-      UpsertForecastRequest: { type: 'object', required: ['expectedRevenue', 'expectedFixedCosts', 'expectedVariableCosts'], additionalProperties: true },
-      FinancialRecurringTemplate: { type: 'object', additionalProperties: true },
-      CreateRecurringTemplateRequest: { type: 'object', required: ['name', 'category', 'type', 'recurringFrequency', 'updateDay', 'requiresValueUpdate', 'startMonth'], additionalProperties: true },
-      UpdateRecurringTemplateRequest: { type: 'object', additionalProperties: true },
-      GenerateRecurringMonthRequest: { type: 'object', required: ['month'], properties: { month: { type: 'string', example: '2026-02' } } },
-      GenerateRecurringMonthResponse: { type: 'object', additionalProperties: true },
-      GenerateInstallmentsRequest: { type: 'object', required: ['description', 'category', 'type', 'totalAmount', 'installments', 'firstDueOn'], additionalProperties: true },
-      GenerateInstallmentsResponse: { type: 'object', additionalProperties: true },
-      FinancialOverview: { type: 'object', additionalProperties: true },
-      BillingCreditSalesReport: { type: 'object', additionalProperties: true },
-      FrontendSettings: { type: 'object', additionalProperties: true },
-      UpsertFrontendSettingsRequest: { type: 'object', additionalProperties: true },
-      ApproveRejectCreditRequest: { type: 'object', properties: { note: { type: 'string' } } },
-      WebhookResponse: { type: 'object', required: ['accepted', 'updated'], properties: { accepted: { type: 'boolean' }, updated: { type: 'boolean' }, reason: { type: 'string' }, request: schemaRef('CreditPurchaseRequest') } },
-      UpdateMeRequest: { type: 'object', additionalProperties: true }
+    responses: responses as any
+  });
+};
+
+addPath('/docs', 'get', { summary: 'Swagger UI', operationId: 'getSwaggerUi', tags: ['Docs'], security: [], includeErrors: false, responseCode: 200, responseSchema: z.string() });
+addPath('/docs/openapi.json', 'get', { summary: 'OpenAPI JSON', operationId: 'getOpenApiJson', tags: ['Docs'], security: [], includeErrors: false, responseSchema: GenericObject });
+addPath('/health', 'get', { summary: 'Health check', operationId: 'getHealth', tags: ['Health'], security: [], includeErrors: false, responseSchema: HealthResponse, extraResponses: { 503: { description: 'Servico degradado', content: { 'application/json': { schema: HealthResponse } } } } });
+
+addPath('/auth/register', 'post', { summary: 'Registrar conta', operationId: 'register', tags: ['Auth'], security: appTokenSec, requestSchema: RegisterRequest, responseCode: 201, responseSchema: AuthResponse });
+addPath('/auth/login', 'post', { summary: 'Login', operationId: 'login', tags: ['Auth'], security: appTokenSec, requestSchema: LoginRequest, responseSchema: AuthResponse, extraResponses: { 429: { description: 'Muitas tentativas', content: { 'application/json': { schema: ErrorResponse } } } } });
+
+addPath('/me', 'get', { summary: 'Obter perfil autenticado', operationId: 'getMe', tags: ['Me'], security: authSec, responseSchema: CustomerProfile });
+addPath('/me', 'put', { summary: 'Atualizar perfil autenticado', operationId: 'updateMe', tags: ['Me'], security: authSec, requestSchema: UpdateMeRequest, responseSchema: CustomerProfile });
+addPath('/me/credits/purchase', 'post', { summary: 'Comprar creditos diretamente', operationId: 'purchaseMyCredits', tags: ['Me'], security: authSec, requestSchema: CreditPurchaseRequestInput, responseCode: 201, responseSchema: CreditPurchaseRequest });
+addPath('/me/credits/requests', 'post', { summary: 'Solicitar compra de creditos', operationId: 'requestMyCreditsPurchase', tags: ['Me'], security: authSec, requestSchema: CreditPurchaseRequestInput, responseCode: 201, responseSchema: CreditPurchaseRequest });
+addPath('/me/credits/requests', 'get', { summary: 'Listar solicitacoes de compra de creditos', operationId: 'listMyCreditsPurchaseRequests', tags: ['Me'], security: authSec, parameters: [{ name: 'productCode', in: 'query' }], responseSchema: CreditPurchaseRequest, responseArray: true });
+
+addPath('/interviewers', 'get', { summary: 'Listar entrevistadores', operationId: 'listInterviewers', tags: ['Interviewers'], security: authSec, responseSchema: InterviewerProfile, responseArray: true });
+addPath('/interviewers', 'post', { summary: 'Criar entrevistador', operationId: 'createInterviewer', tags: ['Interviewers'], security: authSec, requestSchema: CreateInterviewerRequest, responseCode: 201, responseSchema: InterviewerProfile });
+addPath('/interviewers/{interviewerId}', 'put', { summary: 'Atualizar entrevistador', operationId: 'updateInterviewer', tags: ['Interviewers'], security: authSec, parameters: [{ name: 'interviewerId', in: 'path' }], requestSchema: UpdateInterviewerRequest, responseSchema: InterviewerProfile });
+addPath('/interviewers/{interviewerId}', 'delete', { summary: 'Remover entrevistador', operationId: 'deleteInterviewer', tags: ['Interviewers'], security: authSec, parameters: [{ name: 'interviewerId', in: 'path' }], responseSchema: DeleteFlagResponse });
+addPath('/interviewers/{interviewerId}/status', 'put', { summary: 'Atualizar status do entrevistador', operationId: 'setInterviewerStatus', tags: ['Interviewers'], security: authSec, parameters: [{ name: 'interviewerId', in: 'path' }], requestSchema: SetInterviewerStatusRequest, responseSchema: InterviewerProfile });
+
+addPath('/surveys', 'get', { summary: 'Listar pesquisas', operationId: 'listSurveys', tags: ['Surveys'], security: authSec, responseSchema: CustomerSurvey, responseArray: true });
+addPath('/surveys', 'post', { summary: 'Criar pesquisa', operationId: 'createSurvey', tags: ['Surveys'], security: authSec, requestSchema: CreateSurveyRequest, responseCode: 201, responseSchema: CustomerSurvey });
+addPath('/surveys/{surveyId}', 'get', { summary: 'Obter pesquisa', operationId: 'getSurvey', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], responseSchema: CustomerSurvey });
+addPath('/surveys/{surveyId}', 'put', { summary: 'Atualizar pesquisa', operationId: 'updateSurvey', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], requestSchema: UpdateSurveyRequest, responseSchema: CustomerSurvey });
+addPath('/surveys/{surveyId}/responses', 'get', { summary: 'Listar respostas da pesquisa', operationId: 'listSurveyResponses', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], responseSchema: SurveyResponseRecord, responseArray: true });
+addPath('/surveys/{surveyId}/responses', 'post', { summary: 'Enviar resposta da pesquisa', operationId: 'submitSurveyResponse', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], requestSchema: SubmitSurveyResponseRequest, responseCode: 201, responseSchema: SurveyResponseRecord });
+addPath('/surveys/{surveyId}/responses/page', 'get', { summary: 'Listar respostas paginadas', operationId: 'listSurveyResponsesPage', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }, { name: 'limit', in: 'query' }, { name: 'cursor', in: 'query' }], responseSchema: CursorSurveyResponsesPage });
+addPath('/surveys/{surveyId}/responses/summary', 'get', { summary: 'Resumo de respostas', operationId: 'getSurveyResponsesSummary', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], responseSchema: GenericObject });
+addPath('/surveys/{surveyId}/heatmap', 'get', { summary: 'Heatmap de respostas', operationId: 'getSurveyHeatmap', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], responseSchema: GenericObject, responseArray: true });
+addPath('/surveys/{surveyId}/responses/batch', 'post', { summary: 'Enviar lote de respostas', operationId: 'submitSurveyResponsesBatch', tags: ['Surveys'], security: authSec, parameters: [{ name: 'surveyId', in: 'path' }], requestSchema: SubmitSurveyResponsesBatchRequest, responseCode: 201, responseSchema: SubmitBatchResponse });
+
+addPath('/interviewer/surveys', 'get', { summary: 'Listar pesquisas disponiveis para entrevistador', operationId: 'listAvailableInterviewerSurveys', tags: ['Interviewer'], security: authSec, responseSchema: CustomerSurvey, responseArray: true });
+
+addPath('/admin/customers', 'get', { summary: 'Listar clientes', operationId: 'listAdminCustomers', tags: ['Admin Customers'], security: authSec, parameters: [{ name: 'productCode', in: 'query' }], responseSchema: AdminCustomerSummaryEnriched, responseArray: true });
+addPath('/admin/customers/{tenantId}/credits/purchase', 'post', { summary: 'Comprar creditos para cliente', operationId: 'purchaseCustomerCredits', tags: ['Admin Customers'], security: authSec, parameters: [{ name: 'tenantId', in: 'path' }], requestSchema: PurchaseCustomerCreditsRequest, responseSchema: TenantSubscriptionSnapshot });
+addPath('/admin/credits/requests', 'get', { summary: 'Listar solicitacoes de credito', operationId: 'listAdminCreditRequests', tags: ['Admin Credits'], security: authSec, parameters: [{ name: 'status', in: 'query' }, { name: 'productCode', in: 'query' }], responseSchema: CreditPurchaseRequest, responseArray: true });
+addPath('/admin/credits/requests/page', 'get', { summary: 'Listar solicitacoes de credito (paginado)', operationId: 'listAdminCreditRequestsPage', tags: ['Admin Credits'], security: authSec, parameters: [{ name: 'status', in: 'query' }, { name: 'productCode', in: 'query' }, { name: 'limit', in: 'query' }, { name: 'cursor', in: 'query' }], responseSchema: CreditPurchaseRequestsPage });
+addPath('/admin/credits/requests/{requestId}/approve', 'post', { summary: 'Aprovar solicitacao de credito', operationId: 'approveAdminCreditRequest', tags: ['Admin Credits'], security: authSec, parameters: [{ name: 'requestId', in: 'path' }], requestSchema: ApproveRejectCreditRequest, requestRequired: false, responseSchema: CreditPurchaseRequest });
+addPath('/admin/credits/requests/{requestId}/reject', 'post', { summary: 'Rejeitar solicitacao de credito', operationId: 'rejectAdminCreditRequest', tags: ['Admin Credits'], security: authSec, parameters: [{ name: 'requestId', in: 'path' }], requestSchema: ApproveRejectCreditRequest, requestRequired: false, responseSchema: CreditPurchaseRequest });
+
+addPath('/admin/payments/config', 'get', { summary: 'Obter configuracao de gateway', operationId: 'getAdminPaymentConfig', tags: ['Admin Payments'], security: authSec, parameters: [{ name: 'productCode', in: 'query' }], responseSchema: PaymentGatewayConfig });
+addPath('/admin/payments/config', 'put', { summary: 'Salvar configuracao de gateway', operationId: 'upsertAdminPaymentConfig', tags: ['Admin Payments'], security: authSec, requestSchema: UpsertPaymentConfigRequest, responseSchema: PaymentGatewayConfig });
+addPath('/admin/billing/credit-sales', 'get', { summary: 'Relatorio de vendas de credito', operationId: 'getAdminBillingCreditSales', tags: ['Admin Billing'], security: authSec, parameters: [{ name: 'tenantId', in: 'query' }, { name: 'productCode', in: 'query' }, { name: 'status', in: 'query' }, { name: 'dateFrom', in: 'query' }, { name: 'dateTo', in: 'query' }], responseSchema: BillingCreditSalesReport });
+
+addPath('/admin/plans', 'get', { summary: 'Listar planos', operationId: 'listPlanDefinitions', tags: ['Admin Plans'], security: authSec, parameters: [{ name: 'productCode', in: 'query' }], responseSchema: PlanDefinition, responseArray: true });
+addPath('/admin/plans', 'post', { summary: 'Criar plano', operationId: 'createPlanDefinition', tags: ['Admin Plans'], security: authSec, requestSchema: CreatePlanRequest, responseCode: 201, responseSchema: PlanDefinition });
+addPath('/admin/plans/{planId}', 'put', { summary: 'Atualizar plano', operationId: 'updatePlanDefinition', tags: ['Admin Plans'], security: authSec, parameters: [{ name: 'planId', in: 'path' }], requestSchema: UpdatePlanRequest, responseSchema: PlanDefinition });
+addPath('/admin/plans/{planId}', 'delete', { summary: 'Excluir plano (logico)', operationId: 'deletePlanDefinition', tags: ['Admin Plans'], security: authSec, parameters: [{ name: 'planId', in: 'path' }], responseSchema: PlanDefinition });
+addPath('/admin/plans/{planId}/audits', 'get', { summary: 'Listar auditoria de plano', operationId: 'listPlanAudits', tags: ['Admin Plans'], security: authSec, parameters: [{ name: 'planId', in: 'path' }], responseSchema: PlanAuditEntry, responseArray: true });
+
+addPath('/admin/users', 'get', { summary: 'Listar usuarios admin', operationId: 'listAdminUsers', tags: ['Admin Users'], security: authSec, responseSchema: OwnerAdminUser, responseArray: true });
+addPath('/admin/users', 'post', { summary: 'Criar usuario admin', operationId: 'createAdminUser', tags: ['Admin Users'], security: authSec, requestSchema: CreateAdminUserRequest, responseCode: 201, responseSchema: OwnerAdminUser });
+addPath('/admin/users/{userId}', 'put', { summary: 'Atualizar usuario admin', operationId: 'updateAdminUser', tags: ['Admin Users'], security: authSec, parameters: [{ name: 'userId', in: 'path' }], requestSchema: UpdateAdminUserRequest, responseSchema: OwnerAdminUser });
+
+addPath('/admin/finance/suppliers', 'get', { summary: 'Listar fornecedores', operationId: 'listFinanceSuppliers', tags: ['Admin Finance'], security: authSec, responseSchema: FinancialSupplier, responseArray: true });
+addPath('/admin/finance/suppliers', 'post', { summary: 'Criar fornecedor', operationId: 'createFinanceSupplier', tags: ['Admin Finance'], security: authSec, requestSchema: CreateSupplierRequest, responseCode: 201, responseSchema: FinancialSupplier });
+addPath('/admin/finance/suppliers/{supplierId}', 'put', { summary: 'Atualizar fornecedor', operationId: 'updateFinanceSupplier', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'supplierId', in: 'path' }], requestSchema: UpdateSupplierRequest, responseSchema: FinancialSupplier });
+
+addPath('/admin/finance/expenses', 'get', { summary: 'Listar despesas', operationId: 'listFinanceExpenses', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'status', in: 'query' }, { name: 'type', in: 'query' }, { name: 'dateFrom', in: 'query' }, { name: 'dateTo', in: 'query' }, { name: 'supplierId', in: 'query' }, { name: 'month', in: 'query' }, { name: 'isForecast', in: 'query' }], responseSchema: FinancialExpense, responseArray: true });
+addPath('/admin/finance/expenses', 'post', { summary: 'Criar despesa', operationId: 'createFinanceExpense', tags: ['Admin Finance'], security: authSec, requestSchema: CreateExpenseRequest, responseCode: 201, responseSchema: FinancialExpense });
+addPath('/admin/finance/expenses/{expenseId}', 'put', { summary: 'Atualizar despesa', operationId: 'updateFinanceExpense', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'expenseId', in: 'path' }], requestSchema: UpdateExpenseRequest, responseSchema: FinancialExpense });
+addPath('/admin/finance/forecast/{month}', 'get', { summary: 'Obter forecast', operationId: 'getFinanceForecast', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'month', in: 'path' }], responseSchema: FinancialForecastMonth });
+addPath('/admin/finance/forecast/{month}', 'put', { summary: 'Salvar forecast', operationId: 'upsertFinanceForecast', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'month', in: 'path' }], requestSchema: UpsertForecastRequest, responseSchema: FinancialForecastMonth });
+addPath('/admin/finance/overview', 'get', { summary: 'Resumo financeiro', operationId: 'getFinanceOverview', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'dateFrom', in: 'query' }, { name: 'dateTo', in: 'query' }, { name: 'month', in: 'query' }], responseSchema: FinancialOverview });
+addPath('/admin/finance/recurring/templates', 'get', { summary: 'Listar templates recorrentes', operationId: 'listFinanceRecurringTemplates', tags: ['Admin Finance'], security: authSec, responseSchema: FinancialRecurringTemplate, responseArray: true });
+addPath('/admin/finance/recurring/templates', 'post', { summary: 'Criar template recorrente', operationId: 'createFinanceRecurringTemplate', tags: ['Admin Finance'], security: authSec, requestSchema: CreateRecurringTemplateRequest, responseCode: 201, responseSchema: FinancialRecurringTemplate });
+addPath('/admin/finance/recurring/templates/{templateId}', 'put', { summary: 'Atualizar template recorrente', operationId: 'updateFinanceRecurringTemplate', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'templateId', in: 'path' }], requestSchema: UpdateRecurringTemplateRequest, responseSchema: FinancialRecurringTemplate });
+addPath('/admin/finance/recurring/generate', 'post', { summary: 'Gerar despesas recorrentes do mes', operationId: 'generateFinanceRecurringMonth', tags: ['Admin Finance'], security: authSec, requestSchema: GenerateRecurringMonthRequest, responseSchema: GenerateRecurringMonthResponse });
+addPath('/admin/finance/recurring/pending-updates', 'get', { summary: 'Listar pendencias de valor', operationId: 'listFinancePendingUpdates', tags: ['Admin Finance'], security: authSec, parameters: [{ name: 'month', in: 'query' }], responseSchema: FinancialExpense, responseArray: true });
+addPath('/admin/finance/installments/generate', 'post', { summary: 'Gerar parcelamento', operationId: 'generateFinanceInstallments', tags: ['Admin Finance'], security: authSec, requestSchema: GenerateInstallmentsRequest, responseCode: 201, responseSchema: GenerateInstallmentsResponse });
+
+addPath('/admin/frontend/settings', 'get', { summary: 'Obter configuracoes do frontend', operationId: 'getAdminFrontendSettings', tags: ['Admin Frontend'], security: authSec, parameters: [{ name: 'productCode', in: 'query' }], responseSchema: FrontendSettings });
+addPath('/admin/frontend/settings', 'put', { summary: 'Salvar configuracoes do frontend', operationId: 'upsertAdminFrontendSettings', tags: ['Admin Frontend'], security: authSec, requestSchema: UpsertFrontendSettingsRequest, responseSchema: FrontendSettings });
+
+addPath('/plans/catalog', 'get', { summary: 'Catalogo publico de planos', operationId: 'listPublicPlanCatalog', tags: ['Public'], security: appTokenSec, parameters: [{ name: 'productCode', in: 'query' }], responseSchema: PlanDefinition, responseArray: true });
+addPath('/frontend/settings', 'get', { summary: 'Configuracoes publicas de frontend', operationId: 'getPublicFrontendSettings', tags: ['Public'], security: [], parameters: [{ name: 'productCode', in: 'query' }], responseSchema: FrontendSettings });
+
+addPath('/integrations/brasilapi/cep/{cep}', 'get', { summary: 'Consultar CEP', operationId: 'getCep', tags: ['Integrations'], security: appTokenSec, parameters: [{ name: 'cep', in: 'path' }], responseSchema: GenericObject });
+addPath('/integrations/brasilapi/cnpj/{cnpj}', 'get', { summary: 'Consultar CNPJ', operationId: 'getCnpj', tags: ['Integrations'], security: appTokenSec, parameters: [{ name: 'cnpj', in: 'path' }], responseSchema: GenericObject });
+addPath('/integrations/brasilapi/cpf/{cpf}', 'get', { summary: 'Validar CPF', operationId: 'validateCpf', tags: ['Integrations'], security: appTokenSec, parameters: [{ name: 'cpf', in: 'path' }], responseSchema: GenericObject });
+
+addPath('/webhooks/payments/{provider}', 'post', {
+  summary: 'Receber webhook de pagamento',
+  operationId: 'receivePaymentWebhook',
+  tags: ['Webhooks'],
+  security: [],
+  parameters: [{ name: 'provider', in: 'path' }, { name: 'productCode', in: 'query' }],
+  requestSchema: GenericObject,
+  responseSchema: WebhookResponse,
+  extraResponses: {
+    202: {
+      description: 'Aceito',
+      content: { 'application/json': { schema: WebhookResponse } }
     }
-  },
-  paths: {
-    '/docs': method('get', { summary: 'Swagger UI', tags: ['Docs'], operationId: 'getSwaggerUi', security: [], responses: { '200': { description: 'HTML do Swagger UI', content: { 'text/html': { schema: { type: 'string' } } } } } }),
-    '/docs/openapi.json': method('get', { summary: 'OpenAPI JSON', tags: ['Docs'], operationId: 'getOpenApiJson', security: [], responses: { '200': responseJson('GenericObject') } }),
-    '/health': method('get', { summary: 'Health check', tags: ['Health'], operationId: 'getHealth', security: [], responses: { '200': responseJson('HealthResponse'), '503': responseJson('HealthResponse') } }),
-    '/auth/register': method('post', { summary: 'Registrar conta', tags: ['Auth'], operationId: 'register', security: [{ AppToken: [] }], requestBody: requestJson('RegisterRequest'), responses: { '201': responseJson('AuthResponse'), ...errs } }),
-    '/auth/login': method('post', { summary: 'Login', tags: ['Auth'], operationId: 'login', security: [{ AppToken: [] }], requestBody: requestJson('LoginRequest'), responses: { '200': responseJson('AuthResponse'), ...errs, '429': errRef('BadRequest') } }),
-    '/me': {
-      ...method('get', { summary: 'Obter perfil autenticado', tags: ['Me'], operationId: 'getMe', responses: { '200': responseJson('CustomerProfile'), ...errs } }),
-      ...method('put', { summary: 'Atualizar perfil autenticado', tags: ['Me'], operationId: 'updateMe', requestBody: requestJson('UpdateMeRequest'), responses: { '200': responseJson('CustomerProfile'), ...errs } })
-    },
-    '/me/credits/purchase': method('post', { summary: 'Comprar creditos diretamente', tags: ['Me'], operationId: 'purchaseMyCredits', requestBody: requestJson('CreditPurchaseRequestInput'), responses: { '201': responseJson('CreditPurchaseRequest'), ...errs } }),
-    '/me/credits/requests': {
-      ...method('post', { summary: 'Solicitar compra de creditos', tags: ['Me'], operationId: 'requestMyCreditsPurchase', requestBody: requestJson('CreditPurchaseRequestInput'), responses: { '201': responseJson('CreditPurchaseRequest'), ...errs } }),
-      ...method('get', { summary: 'Listar solicitacoes de compra de creditos', tags: ['Me'], operationId: 'listMyCreditsPurchaseRequests', parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseArray('CreditPurchaseRequest'), ...errs } })
-    },
-    '/interviewers': {
-      ...method('get', { summary: 'Listar entrevistadores', tags: ['Interviewers'], operationId: 'listInterviewers', responses: { '200': responseArray('InterviewerProfile'), ...errs } }),
-      ...method('post', { summary: 'Criar entrevistador', tags: ['Interviewers'], operationId: 'createInterviewer', requestBody: requestJson('CreateInterviewerRequest'), responses: { '201': responseJson('InterviewerProfile'), ...errs } })
-    },
-    '/interviewers/{interviewerId}': {
-      ...method('put', { summary: 'Atualizar entrevistador', tags: ['Interviewers'], operationId: 'updateInterviewer', parameters: [pathParam('interviewerId', 'ID do entrevistador')], requestBody: requestJson('UpdateInterviewerRequest'), responses: { '200': responseJson('InterviewerProfile'), ...errs } }),
-      ...method('delete', { summary: 'Remover entrevistador', tags: ['Interviewers'], operationId: 'deleteInterviewer', parameters: [pathParam('interviewerId', 'ID do entrevistador')], responses: { '200': responseJson('DeleteFlagResponse'), ...errs } })
-    },
-    '/interviewers/{interviewerId}/status': method('put', { summary: 'Atualizar status do entrevistador', tags: ['Interviewers'], operationId: 'setInterviewerStatus', parameters: [pathParam('interviewerId', 'ID do entrevistador')], requestBody: requestJson('SetInterviewerStatusRequest'), responses: { '200': responseJson('InterviewerProfile'), ...errs } }),
-    '/surveys': {
-      ...method('get', { summary: 'Listar pesquisas', tags: ['Surveys'], operationId: 'listSurveys', responses: { '200': responseArray('CustomerSurvey'), ...errs } }),
-      ...method('post', { summary: 'Criar pesquisa', tags: ['Surveys'], operationId: 'createSurvey', requestBody: requestJson('CreateSurveyRequest'), responses: { '201': responseJson('CustomerSurvey'), ...errs } })
-    },
-    '/surveys/{surveyId}': {
-      ...method('get', { summary: 'Obter pesquisa', tags: ['Surveys'], operationId: 'getSurvey', parameters: [pathParam('surveyId', 'ID da pesquisa')], responses: { '200': responseJson('CustomerSurvey'), ...errs } }),
-      ...method('put', { summary: 'Atualizar pesquisa', tags: ['Surveys'], operationId: 'updateSurvey', parameters: [pathParam('surveyId', 'ID da pesquisa')], requestBody: requestJson('UpdateSurveyRequest'), responses: { '200': responseJson('CustomerSurvey'), ...errs } })
-    },
-    '/surveys/{surveyId}/responses': {
-      ...method('get', { summary: 'Listar respostas da pesquisa', tags: ['Surveys'], operationId: 'listSurveyResponses', parameters: [pathParam('surveyId', 'ID da pesquisa')], responses: { '200': responseArray('SurveyResponseRecord'), ...errs } }),
-      ...method('post', { summary: 'Enviar resposta da pesquisa', tags: ['Surveys'], operationId: 'submitSurveyResponse', parameters: [pathParam('surveyId', 'ID da pesquisa')], requestBody: requestJson('SubmitSurveyResponseRequest'), responses: { '201': responseJson('SurveyResponseRecord'), ...errs } })
-    },
-    '/surveys/{surveyId}/responses/page': method('get', { summary: 'Listar respostas paginadas', tags: ['Surveys'], operationId: 'listSurveyResponsesPage', parameters: [pathParam('surveyId', 'ID da pesquisa'), queryParam('limit', 'Limite', { type: 'integer', minimum: 1, maximum: 200 }), queryParam('cursor', 'Cursor')], responses: { '200': responseJson('CursorSurveyResponsesPage'), ...errs } }),
-    '/surveys/{surveyId}/responses/summary': method('get', { summary: 'Resumo de respostas', tags: ['Surveys'], operationId: 'getSurveyResponsesSummary', parameters: [pathParam('surveyId', 'ID da pesquisa')], responses: { '200': responseJson('SurveyResponsesSummary'), ...errs } }),
-    '/surveys/{surveyId}/heatmap': method('get', { summary: 'Heatmap de respostas', tags: ['Surveys'], operationId: 'getSurveyHeatmap', parameters: [pathParam('surveyId', 'ID da pesquisa')], responses: { '200': responseArray('HeatmapPoint'), ...errs } }),
-    '/surveys/{surveyId}/responses/batch': method('post', { summary: 'Enviar lote de respostas', tags: ['Surveys'], operationId: 'submitSurveyResponsesBatch', parameters: [pathParam('surveyId', 'ID da pesquisa')], requestBody: requestJson('SubmitSurveyResponsesBatchRequest'), responses: { '201': responseJson('SubmitBatchResponse'), ...errs } }),
-    '/interviewer/surveys': method('get', { summary: 'Listar pesquisas disponiveis para entrevistador', tags: ['Interviewer'], operationId: 'listAvailableInterviewerSurveys', responses: { '200': responseArray('CustomerSurvey'), ...errs } }),
-    '/admin/customers': method('get', { summary: 'Listar clientes', tags: ['Admin Customers'], operationId: 'listAdminCustomers', parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseArray('AdminCustomerSummaryEnriched'), ...errs } }),
-    '/admin/customers/{tenantId}/credits/purchase': method('post', { summary: 'Comprar creditos para cliente', tags: ['Admin Customers'], operationId: 'purchaseCustomerCredits', parameters: [pathParam('tenantId', 'ID do tenant')], requestBody: requestJson('PurchaseCustomerCreditsRequest'), responses: { '200': responseJson('TenantSubscriptionSnapshot'), ...errs } }),
-    '/admin/credits/requests': method('get', { summary: 'Listar solicitacoes de credito', tags: ['Admin Credits'], operationId: 'listAdminCreditRequests', parameters: [queryParam('status', 'Status', { type: 'string', enum: ['PENDING', 'IN_ANALYSIS', 'APPROVED', 'REJECTED'] }), queryParam('productCode', 'Codigo do produto')], responses: { '200': responseArray('CreditPurchaseRequest'), ...errs } }),
-    '/admin/credits/requests/page': method('get', { summary: 'Listar solicitacoes de credito (paginado)', tags: ['Admin Credits'], operationId: 'listAdminCreditRequestsPage', parameters: [queryParam('status', 'Status', { type: 'string', enum: ['PENDING', 'IN_ANALYSIS', 'APPROVED', 'REJECTED'] }), queryParam('productCode', 'Codigo do produto'), queryParam('limit', 'Limite', { type: 'integer', minimum: 1, maximum: 200 }), queryParam('cursor', 'Cursor')], responses: { '200': responseJson('CreditPurchaseRequestsPage'), ...errs } }),
-    '/admin/credits/requests/{requestId}/approve': method('post', { summary: 'Aprovar solicitacao de credito', tags: ['Admin Credits'], operationId: 'approveAdminCreditRequest', parameters: [pathParam('requestId', 'ID da solicitacao')], requestBody: requestJson('ApproveRejectCreditRequest', false), responses: { '200': responseJson('CreditPurchaseRequest'), ...errs } }),
-    '/admin/credits/requests/{requestId}/reject': method('post', { summary: 'Rejeitar solicitacao de credito', tags: ['Admin Credits'], operationId: 'rejectAdminCreditRequest', parameters: [pathParam('requestId', 'ID da solicitacao')], requestBody: requestJson('ApproveRejectCreditRequest', false), responses: { '200': responseJson('CreditPurchaseRequest'), ...errs } }),
-    '/admin/payments/config': {
-      ...method('get', { summary: 'Obter configuracao de gateway', tags: ['Admin Payments'], operationId: 'getAdminPaymentConfig', parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseJson('PaymentGatewayConfig'), ...errs } }),
-      ...method('put', { summary: 'Salvar configuracao de gateway', tags: ['Admin Payments'], operationId: 'upsertAdminPaymentConfig', requestBody: requestJson('UpsertPaymentConfigRequest'), responses: { '200': responseJson('PaymentGatewayConfig'), ...errs } })
-    },
-    '/admin/billing/credit-sales': method('get', { summary: 'Relatorio de vendas de credito', tags: ['Admin Billing'], operationId: 'getAdminBillingCreditSales', parameters: [queryParam('tenantId', 'Filtrar por tenant'), queryParam('productCode', 'Codigo do produto'), queryParam('status', 'Status', { type: 'string', enum: ['ALL', 'OPEN', 'PENDING', 'IN_ANALYSIS', 'APPROVED', 'REJECTED'] }), queryParam('dateFrom', 'Data inicial (YYYY-MM-DD)'), queryParam('dateTo', 'Data final (YYYY-MM-DD)')], responses: { '200': responseJson('BillingCreditSalesReport'), ...errs } }),
-    '/admin/plans': {
-      ...method('get', { summary: 'Listar planos', tags: ['Admin Plans'], operationId: 'listPlanDefinitions', parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseArray('PlanDefinition'), ...errs } }),
-      ...method('post', { summary: 'Criar plano', tags: ['Admin Plans'], operationId: 'createPlanDefinition', requestBody: requestJson('CreatePlanRequest'), responses: { '201': responseJson('PlanDefinition'), ...errs } })
-    },
-    '/admin/plans/{planId}': {
-      ...method('put', { summary: 'Atualizar plano', tags: ['Admin Plans'], operationId: 'updatePlanDefinition', parameters: [pathParam('planId', 'ID do plano')], requestBody: requestJson('UpdatePlanRequest'), responses: { '200': responseJson('PlanDefinition'), ...errs } }),
-      ...method('delete', { summary: 'Excluir plano (logico)', tags: ['Admin Plans'], operationId: 'deletePlanDefinition', parameters: [pathParam('planId', 'ID do plano')], responses: { '200': responseJson('PlanDefinition'), ...errs } })
-    },
-    '/admin/plans/{planId}/audits': method('get', { summary: 'Listar auditoria de plano', tags: ['Admin Plans'], operationId: 'listPlanAudits', parameters: [pathParam('planId', 'ID do plano')], responses: { '200': responseArray('PlanAuditEntry'), ...errs } }),
-    '/admin/users': {
-      ...method('get', { summary: 'Listar usuarios admin', tags: ['Admin Users'], operationId: 'listAdminUsers', responses: { '200': responseArray('OwnerAdminUser'), ...errs } }),
-      ...method('post', { summary: 'Criar usuario admin', tags: ['Admin Users'], operationId: 'createAdminUser', requestBody: requestJson('CreateAdminUserRequest'), responses: { '201': responseJson('OwnerAdminUser'), ...errs } })
-    },
-    '/admin/users/{userId}': method('put', { summary: 'Atualizar usuario admin', tags: ['Admin Users'], operationId: 'updateAdminUser', parameters: [pathParam('userId', 'ID do usuario')], requestBody: requestJson('UpdateAdminUserRequest'), responses: { '200': responseJson('OwnerAdminUser'), ...errs } }),
-    '/admin/finance/suppliers': {
-      ...method('get', { summary: 'Listar fornecedores', tags: ['Admin Finance'], operationId: 'listFinanceSuppliers', responses: { '200': responseArray('FinancialSupplier'), ...errs } }),
-      ...method('post', { summary: 'Criar fornecedor', tags: ['Admin Finance'], operationId: 'createFinanceSupplier', requestBody: requestJson('CreateSupplierRequest'), responses: { '201': responseJson('FinancialSupplier'), ...errs } })
-    },
-    '/admin/finance/suppliers/{supplierId}': method('put', { summary: 'Atualizar fornecedor', tags: ['Admin Finance'], operationId: 'updateFinanceSupplier', parameters: [pathParam('supplierId', 'ID do fornecedor')], requestBody: requestJson('UpdateSupplierRequest'), responses: { '200': responseJson('FinancialSupplier'), ...errs } }),
-    '/admin/finance/expenses': {
-      ...method('get', { summary: 'Listar despesas', tags: ['Admin Finance'], operationId: 'listFinanceExpenses', parameters: [queryParam('status', 'Status', { type: 'string', enum: ['PLANNED', 'OPEN', 'PAID', 'CANCELLED', 'PENDING_VALUE'] }), queryParam('type', 'Tipo', { type: 'string', enum: ['FIXED', 'VARIABLE', 'FIXED_VARIABLE'] }), queryParam('dateFrom', 'Data inicial'), queryParam('dateTo', 'Data final'), queryParam('supplierId', 'ID do fornecedor'), queryParam('month', 'Mes YYYY-MM'), queryParam('isForecast', 'Filtrar previsao', { type: 'boolean' })], responses: { '200': responseArray('FinancialExpense'), ...errs } }),
-      ...method('post', { summary: 'Criar despesa', tags: ['Admin Finance'], operationId: 'createFinanceExpense', requestBody: requestJson('CreateExpenseRequest'), responses: { '201': responseJson('FinancialExpense'), ...errs } })
-    },
-    '/admin/finance/expenses/{expenseId}': method('put', { summary: 'Atualizar despesa', tags: ['Admin Finance'], operationId: 'updateFinanceExpense', parameters: [pathParam('expenseId', 'ID da despesa')], requestBody: requestJson('UpdateExpenseRequest'), responses: { '200': responseJson('FinancialExpense'), ...errs } }),
-    '/admin/finance/forecast/{month}': {
-      ...method('get', { summary: 'Obter forecast', tags: ['Admin Finance'], operationId: 'getFinanceForecast', parameters: [pathParam('month', 'Mes YYYY-MM')], responses: { '200': responseJson('FinancialForecastMonth'), ...errs } }),
-      ...method('put', { summary: 'Salvar forecast', tags: ['Admin Finance'], operationId: 'upsertFinanceForecast', parameters: [pathParam('month', 'Mes YYYY-MM')], requestBody: requestJson('UpsertForecastRequest'), responses: { '200': responseJson('FinancialForecastMonth'), ...errs } })
-    },
-    '/admin/finance/overview': method('get', { summary: 'Resumo financeiro', tags: ['Admin Finance'], operationId: 'getFinanceOverview', parameters: [queryParam('dateFrom', 'Data inicial'), queryParam('dateTo', 'Data final'), queryParam('month', 'Mes YYYY-MM')], responses: { '200': responseJson('FinancialOverview'), ...errs } }),
-    '/admin/finance/recurring/templates': {
-      ...method('get', { summary: 'Listar templates recorrentes', tags: ['Admin Finance'], operationId: 'listFinanceRecurringTemplates', responses: { '200': responseArray('FinancialRecurringTemplate'), ...errs } }),
-      ...method('post', { summary: 'Criar template recorrente', tags: ['Admin Finance'], operationId: 'createFinanceRecurringTemplate', requestBody: requestJson('CreateRecurringTemplateRequest'), responses: { '201': responseJson('FinancialRecurringTemplate'), ...errs } })
-    },
-    '/admin/finance/recurring/templates/{templateId}': method('put', { summary: 'Atualizar template recorrente', tags: ['Admin Finance'], operationId: 'updateFinanceRecurringTemplate', parameters: [pathParam('templateId', 'ID do template')], requestBody: requestJson('UpdateRecurringTemplateRequest'), responses: { '200': responseJson('FinancialRecurringTemplate'), ...errs } }),
-    '/admin/finance/recurring/generate': method('post', { summary: 'Gerar despesas recorrentes do mes', tags: ['Admin Finance'], operationId: 'generateFinanceRecurringMonth', requestBody: requestJson('GenerateRecurringMonthRequest'), responses: { '200': responseJson('GenerateRecurringMonthResponse'), ...errs } }),
-    '/admin/finance/recurring/pending-updates': method('get', { summary: 'Listar pendencias de valor', tags: ['Admin Finance'], operationId: 'listFinancePendingUpdates', parameters: [queryParam('month', 'Mes YYYY-MM')], responses: { '200': responseArray('FinancialExpense'), ...errs } }),
-    '/admin/finance/installments/generate': method('post', { summary: 'Gerar parcelamento', tags: ['Admin Finance'], operationId: 'generateFinanceInstallments', requestBody: requestJson('GenerateInstallmentsRequest'), responses: { '201': responseJson('GenerateInstallmentsResponse'), ...errs } }),
-    '/admin/frontend/settings': {
-      ...method('get', { summary: 'Obter configuracoes do frontend', tags: ['Admin Frontend'], operationId: 'getAdminFrontendSettings', parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseJson('FrontendSettings'), ...errs } }),
-      ...method('put', { summary: 'Salvar configuracoes do frontend', tags: ['Admin Frontend'], operationId: 'upsertAdminFrontendSettings', requestBody: requestJson('UpsertFrontendSettingsRequest'), responses: { '200': responseJson('FrontendSettings'), ...errs } })
-    },
-    '/plans/catalog': method('get', { summary: 'Catalogo publico de planos', tags: ['Public'], operationId: 'listPublicPlanCatalog', security: [{ AppToken: [] }], parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseArray('PlanDefinition'), ...errs } }),
-    '/frontend/settings': method('get', { summary: 'Configuracoes publicas de frontend', tags: ['Public'], operationId: 'getPublicFrontendSettings', security: [], parameters: [queryParam('productCode', 'Codigo do produto')], responses: { '200': responseJson('FrontendSettings'), ...errs } }),
-    '/integrations/brasilapi/cep/{cep}': method('get', { summary: 'Consultar CEP', tags: ['Integrations'], operationId: 'getCep', security: [{ AppToken: [] }], parameters: [pathParam('cep', 'CEP com 8 digitos')], responses: { '200': responseJson('GenericObject'), ...errs } }),
-    '/integrations/brasilapi/cnpj/{cnpj}': method('get', { summary: 'Consultar CNPJ', tags: ['Integrations'], operationId: 'getCnpj', security: [{ AppToken: [] }], parameters: [pathParam('cnpj', 'CNPJ com 14 digitos')], responses: { '200': responseJson('GenericObject'), ...errs } }),
-    '/integrations/brasilapi/cpf/{cpf}': method('get', { summary: 'Validar CPF', tags: ['Integrations'], operationId: 'validateCpf', security: [{ AppToken: [] }], parameters: [pathParam('cpf', 'CPF com 11 digitos')], responses: { '200': responseJson('GenericObject'), ...errs } }),
-    '/webhooks/payments/{provider}': method('post', { summary: 'Receber webhook de pagamento', tags: ['Webhooks'], operationId: 'receivePaymentWebhook', security: [], parameters: [pathParam('provider', 'Provider de pagamento'), queryParam('productCode', 'Codigo do produto')], requestBody: requestJson('GenericObject'), responses: { '200': responseJson('WebhookResponse'), '202': responseJson('WebhookResponse'), ...errs } })
   }
 });
+
+export const buildOpenApiSpec = (serverUrl: string): Record<string, unknown> => {
+  const generator = new OpenApiGeneratorV3(registry.definitions);
+  const document = generator.generateDocument({
+    openapi: '3.0.3',
+    info: {
+      title: 'Insights BFF API',
+      version: '1.0.0',
+      description: 'Documentacao OpenAPI da API Insights BFF (Serverless).'
+    },
+    servers: [{ url: serverUrl }],
+    tags: [
+      { name: 'Auth' },
+      { name: 'Health' },
+      { name: 'Me' },
+      { name: 'Interviewers' },
+      { name: 'Surveys' },
+      { name: 'Interviewer' },
+      { name: 'Admin Customers' },
+      { name: 'Admin Credits' },
+      { name: 'Admin Payments' },
+      { name: 'Admin Billing' },
+      { name: 'Admin Plans' },
+      { name: 'Admin Users' },
+      { name: 'Admin Finance' },
+      { name: 'Admin Frontend' },
+      { name: 'Public' },
+      { name: 'Integrations' },
+      { name: 'Webhooks' },
+      { name: 'Docs' }
+    ],
+    security: [{ BearerAuth: [], AppToken: [] }]
+  } as any);
+
+  const withSecuritySchemes = document as any;
+  withSecuritySchemes.components = withSecuritySchemes.components ?? {};
+  withSecuritySchemes.components.securitySchemes = {
+    BearerAuth: {
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT'
+    },
+    AppToken: {
+      type: 'apiKey',
+      in: 'header',
+      name: 'X-App-Token'
+    }
+  };
+
+  return withSecuritySchemes as Record<string, unknown>;
+};
