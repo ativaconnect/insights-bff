@@ -5,7 +5,7 @@ import { InterviewerRepository } from '../../../../infrastructure/persistence/dy
 import { OwnerAdminUserRepository } from '../../../../infrastructure/persistence/dynamodb/owner-admin-user.repository';
 import { CaptchaVerifierService } from '../../../../infrastructure/security/captcha-verifier.service';
 import { LoginGuardService } from '../../../../infrastructure/security/login-guard.service';
-import { assertConfiguredSecret, isLocalStage } from '../../../../infrastructure/security/security-config';
+import { assertConfiguredSecret } from '../../../../infrastructure/security/security-config';
 import { LoginRequestSchema, type LoginRequestDto } from '../../docs/schemas';
 import { authorizeAppToken } from '../../middleware/app-token.middleware';
 import { parseBodyWithSchema, RequestValidationError } from '../../request';
@@ -43,14 +43,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return fail(401, 'CAPTCHA invalido.');
     }
 
-    if (isLocalStage(process.env.APP_STAGE)) {
-      await ownerAdminRepository.ensureBootstrapAdmin({
-        tenantId: (process.env.DEFAULT_ADMIN_TENANT_ID ?? 'tenant-owner-admin').trim() || 'tenant-owner-admin',
-        name: (process.env.DEFAULT_ADMIN_NAME ?? 'Administrador Principal').trim() || 'Administrador Principal',
-        email: (process.env.DEFAULT_ADMIN_USER ?? 'admin@ativaconnect.com.br').trim().toLowerCase(),
-        password: (process.env.DEFAULT_ADMIN_PASSWORD ?? 'admin123').trim()
-      });
-    }
+    await ownerAdminRepository.ensureOwnerAccessBootstrap({
+      tenantId: (process.env.DEFAULT_ADMIN_TENANT_ID ?? 'tenant-owner-admin').trim() || 'tenant-owner-admin',
+      name: (process.env.DEFAULT_ADMIN_NAME ?? 'Administrador Principal').trim() || 'Administrador Principal',
+      email: (process.env.DEFAULT_ADMIN_USER ?? 'admin@ativaconnect.com.br').trim().toLowerCase(),
+      password: (process.env.DEFAULT_ADMIN_PASSWORD ?? 'admin123').trim()
+    });
 
     const ownerAdminSession = await ownerAdminRepository.authenticate(body.email, body.password);
     if (ownerAdminSession) {

@@ -141,6 +141,38 @@ export class OwnerAdminUserRepository {
     }
   }
 
+  async ensureOwnerAccessBootstrap(input: {
+    tenantId: string;
+    name: string;
+    email: string;
+    password: string;
+  }): Promise<OwnerAdminUser> {
+    const users = await this.listUsers();
+    const activeOwner = users.find((user) => user.active && user.accessLevel === 'OWNER');
+    if (activeOwner) {
+      return activeOwner;
+    }
+
+    const bootstrapEmail = normalizeEmail(input.email);
+    const bootstrap = await this.getByEmail(bootstrapEmail);
+    if (!bootstrap) {
+      return this.ensureBootstrapAdmin(input);
+    }
+
+    const updated = await this.updateUser(bootstrap.id, {
+      actorId: 'system-bootstrap',
+      name: String(input.name ?? '').trim() || 'Administrador Principal',
+      password: String(input.password ?? '').trim() || 'admin123',
+      accessLevel: 'OWNER',
+      active: true
+    });
+
+    if (!updated) {
+      throw new Error('Nao foi possivel garantir bootstrap owner admin.');
+    }
+    return updated;
+  }
+
   async authenticate(emailInput: string, passwordInput: string): Promise<OwnerAdminUser | null> {
     const lockOutput = await dynamoDbDocumentClient.send(
       new GetCommand({
@@ -346,4 +378,3 @@ export class OwnerAdminUserRepository {
     return stripPassword(next);
   }
 }
-
