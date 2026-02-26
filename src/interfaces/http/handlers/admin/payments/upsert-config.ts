@@ -18,6 +18,7 @@ interface UpsertPaymentConfigBody {
   enabledMethods?: PaymentMethodCode[];
   providerApiBaseUrl?: string;
   providerApiToken?: string;
+  pagSeguroPublicKey?: string;
   webhookSecret?: string;
   pixKey?: string;
   merchantName?: string;
@@ -48,6 +49,7 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
       enabledMethods,
       providerApiBaseUrl: body.providerApiBaseUrl,
       providerApiToken: body.providerApiToken,
+      pagSeguroPublicKey: body.pagSeguroPublicKey,
       webhookSecret: body.webhookSecret,
       pixKey: body.pixKey,
       merchantName: body.merchantName

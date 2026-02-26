@@ -57,20 +57,31 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
     }
 
     const profile = await profileRepository.getProfile(auth.tenantId);
-    const charge = await paymentGateway.createCharge({
-      productCode,
-      requestId: baseRequest.id,
-      tenantId: auth.tenantId,
-      amount: Number(baseRequest.estimatedAmount ?? 0),
-      credits: baseRequest.requestedCredits,
-      planCode: baseRequest.requestedPlanCode,
-      paymentMethod,
-      customer: {
-        name: profile?.tradeName || profile?.legalName,
-        email: profile?.email,
-        document: profile?.document
+    let charge;
+    try {
+      charge = await paymentGateway.createCharge({
+        productCode,
+        requestId: baseRequest.id,
+        tenantId: auth.tenantId,
+        amount: Number(baseRequest.estimatedAmount ?? 0),
+        credits: baseRequest.requestedCredits,
+        planCode: baseRequest.requestedPlanCode,
+        paymentMethod,
+        cardToken: body.cardToken,
+        customer: {
+          name: profile?.tradeName || profile?.legalName,
+          email: profile?.email,
+          document: profile?.document
+        }
+      });
+    } catch (chargeError: any) {
+      if (baseRequest?.id) {
+        await repository
+          .rejectRequest(baseRequest.id, 'payment-init-failed', 'Falha ao iniciar pagamento.')
+          .catch(() => undefined);
       }
-    });
+      throw chargeError;
+    }
 
     if (!charge) {
       return ok(baseRequest, 201);
@@ -86,6 +97,16 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
       pixCopyPaste: charge.pixCopyPaste,
       raw: charge.raw
     });
+
+    if (charge.status === 'PAID' || charge.status === 'FAILED' || charge.status === 'IN_ANALYSIS') {
+      const reconciled = await repository.markPaymentStatusByCharge({
+        provider: charge.provider,
+        chargeId: charge.chargeId,
+        status: charge.status,
+        rawPayload: charge.raw
+      });
+      return ok(reconciled ?? created ?? baseRequest, 201);
+    }
 
     return ok(created ?? baseRequest, 201);
   } catch (error: any) {
@@ -106,6 +127,12 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (error?.message === 'PAYMENT_METHOD_NOT_ENABLED') {
       return fail(422, 'Metodo de pagamento nao habilitado.');
+    }
+    if (error?.message === 'PAGSEGURO_CONFIG_INCOMPLETE') {
+      return fail(422, 'Configuracao do PagSeguro incompleta no admin.');
+    }
+    if (error?.message === 'PAGSEGURO_CARD_TOKEN_REQUIRED') {
+      return fail(422, 'Token do cartao obrigatorio para pagamento com cartao.');
     }
     return fail(400, 'Nao foi possivel solicitar compra de creditos.');
   }

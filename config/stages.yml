@@ -2,6 +2,7 @@ local:
   region: us-east-1
   corsAllowedOrigin: http://localhost:4200
   apiDomain: localhost:3001
+  webhookBaseUrl: https://supermarine-outlandishly-mike.ngrok-free.dev
   customersTableName: insights-customers-local
   plansTableName: insights-plans-local
   billingTableName: insights-billing-local
@@ -37,6 +38,7 @@ dev:
   region: us-east-1
   corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_DEV, 'https://insights-dev.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_DEV, 'insigths.bff-dev.ativaconnect.com.br'}
+  webhookBaseUrl: ${env:WEBHOOK_BASE_URL_DEV, 'https://insigths.bff-dev.ativaconnect.com.br'}
   customersTableName: insights-customers-dev
   plansTableName: insights-plans-dev
   billingTableName: insights-billing-dev
@@ -72,6 +74,7 @@ pet:
   region: us-east-1
   corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PET, 'https://insights-pet.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_PET, 'insigths.bff-pet.ativaconnect.com.br'}
+  webhookBaseUrl: ${env:WEBHOOK_BASE_URL_PET, 'https://insigths.bff-pet.ativaconnect.com.br'}
   customersTableName: insights-customers-pet
   plansTableName: insights-plans-pet
   billingTableName: insights-billing-pet
@@ -107,6 +110,7 @@ prd:
   region: us-east-1
   corsAllowedOrigin: ${env:CORS_ALLOWED_ORIGIN_PRD, 'https://insights.ativaconnect.com.br'}
   apiDomain: ${env:API_DOMAIN_PRD, 'insigths.bff.ativaconnect.com.br'}
+  webhookBaseUrl: ${env:WEBHOOK_BASE_URL_PRD, 'https://insigths.bff.ativaconnect.com.br'}
   customersTableName: insights-customers-prd
   plansTableName: insights-plans-prd
   billingTableName: insights-billing-prd

@@ -89,6 +89,7 @@ export const CreditPurchaseRequestInputSchema = z.object({
   planCode: z.string().min(1),
   credits: z.number().int().positive(),
   paymentMethod: z.enum(['PIX', 'CREDIT_CARD']).optional(),
+  cardToken: z.string().optional(),
   note: z.string().optional()
 });
 

@@ -521,6 +521,19 @@ export class CreditPurchaseRequestRepository {
     return this.mapRecord(updated);
   }
 
+  async getById(requestId: string): Promise<CreditPurchaseRequest | null> {
+    const record = await this.getRecordById(requestId);
+    return record ? this.mapRecord(record) : null;
+  }
+
+  async getByIdForTenant(requestId: string, tenantId: string): Promise<CreditPurchaseRequest | null> {
+    const record = await this.getRecordById(requestId);
+    if (!record || String(record.tenantId) !== String(tenantId)) {
+      return null;
+    }
+    return this.mapRecord(record);
+  }
+
   private async getRecordById(requestId: string): Promise<CreditPurchaseRequestRecord | null> {
     const lockOutput = await dynamoDbDocumentClient.send(
       new GetCommand({

@@ -14,6 +14,7 @@ export interface PaymentGatewayConfigRecord {
   enabledMethods: PaymentMethodCode[];
   providerApiBaseUrl?: string;
   providerApiToken?: string;
+  pagSeguroPublicKey?: string;
   webhookSecret?: string;
   pixKey?: string;
   merchantName?: string;
@@ -29,6 +30,7 @@ export interface PaymentGatewayConfig {
   providerApiBaseUrl?: string;
   hasProviderApiToken: boolean;
   hasWebhookSecret: boolean;
+  pagSeguroPublicKey?: string;
   pixKey?: string;
   merchantName?: string;
   updatedAt: string;
@@ -74,6 +76,7 @@ export class PaymentGatewayConfigRepository {
       enabledMethods: PaymentMethodCode[];
       providerApiBaseUrl?: string;
       providerApiToken?: string;
+      pagSeguroPublicKey?: string;
       webhookSecret?: string;
       pixKey?: string;
       merchantName?: string;
@@ -99,6 +102,9 @@ export class PaymentGatewayConfigRepository {
       providerApiToken: input.providerApiToken?.trim()
         ? input.providerApiToken.trim()
         : current?.providerApiToken,
+      pagSeguroPublicKey: input.pagSeguroPublicKey?.trim()
+        ? input.pagSeguroPublicKey.trim()
+        : current?.pagSeguroPublicKey,
       webhookSecret: input.webhookSecret?.trim()
         ? input.webhookSecret.trim()
         : current?.webhookSecret,
@@ -127,6 +133,7 @@ export class PaymentGatewayConfigRepository {
       providerApiBaseUrl: item.providerApiBaseUrl,
       hasProviderApiToken: Boolean(item.providerApiToken),
       hasWebhookSecret: Boolean(item.webhookSecret),
+      pagSeguroPublicKey: item.pagSeguroPublicKey,
       pixKey: item.pixKey,
       merchantName: item.merchantName,
       updatedAt: item.updatedAt,

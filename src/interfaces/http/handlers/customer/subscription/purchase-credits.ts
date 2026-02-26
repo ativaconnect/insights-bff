@@ -65,6 +65,7 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
       credits: baseRequest.requestedCredits,
       planCode: baseRequest.requestedPlanCode,
       paymentMethod,
+      cardToken: body.cardToken,
       customer: {
         name: profile?.tradeName || profile?.legalName,
         email: profile?.email,
@@ -87,6 +88,16 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
       raw: charge.raw
     });
 
+    if (charge.status === 'PAID' || charge.status === 'FAILED' || charge.status === 'IN_ANALYSIS') {
+      const reconciled = await repository.markPaymentStatusByCharge({
+        provider: charge.provider,
+        chargeId: charge.chargeId,
+        status: charge.status,
+        rawPayload: charge.raw
+      });
+      return ok(reconciled ?? created ?? baseRequest, 201);
+    }
+
     return ok(created ?? baseRequest, 201);
   } catch (error: any) {
     if (error instanceof RequestValidationError) {
@@ -106,6 +117,12 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (error?.message === 'PAYMENT_METHOD_NOT_ENABLED') {
       return fail(422, 'Metodo de pagamento nao habilitado.');
+    }
+    if (error?.message === 'PAGSEGURO_CONFIG_INCOMPLETE') {
+      return fail(422, 'Configuracao do PagSeguro incompleta no admin.');
+    }
+    if (error?.message === 'PAGSEGURO_CARD_TOKEN_REQUIRED') {
+      return fail(422, 'Token do cartao obrigatorio para pagamento com cartao.');
     }
     return fail(400, 'Nao foi possivel solicitar compra de creditos.');
   }

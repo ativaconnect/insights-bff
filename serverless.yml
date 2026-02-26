@@ -85,6 +85,8 @@ provider:
     DYNAMODB_ENDPOINT: ${self:custom.stageConfig.dynamoEndpoint}
     APP_CLIENT_TOKEN: ${self:custom.stageConfig.appClientToken}
     APP_CLIENT_TOKEN_PREVIOUS: ${self:custom.stageConfig.appClientTokenPrevious, ''}
+    APP_API_DOMAIN: ${self:custom.stageConfig.apiDomain, ''}
+    APP_WEBHOOK_BASE_URL: ${self:custom.stageConfig.webhookBaseUrl, ''}
     LOG_LEVEL: ${self:custom.stageConfig.logLevel, 'info'}
     DEFAULT_ADMIN_NAME: ${self:custom.stageConfig.defaultAdminName, ''}
     DEFAULT_ADMIN_USER: ${self:custom.stageConfig.defaultAdminUser, ''}
@@ -178,6 +180,18 @@ functions:
     events:
       - httpApi:
           path: /me/credits/requests
+          method: get
+  getMyCreditsCheckoutConfig:
+    handler: src/interfaces/http/handlers/customer/subscription/get-payment-checkout-config.handler
+    events:
+      - httpApi:
+          path: /me/credits/checkout-config
+          method: get
+  getMyCreditsRequestStatus:
+    handler: src/interfaces/http/handlers/customer/subscription/get-credit-purchase-request-status.handler
+    events:
+      - httpApi:
+          path: /me/credits/requests/{requestId}/status
           method: get
   listInterviewers:
     handler: src/interfaces/http/handlers/customer/interviewers/list-interviewers.handler
