@@ -2,6 +2,7 @@ import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { AdminOwnerRepository, type PlanDefinition } from './admin-owner.repository';
 import { dynamoDbDocumentClient, customersTableName } from './dynamo-client';
 import { DEFAULT_PRODUCT_CODE, normalizeProductCode } from '../../../shared/products';
+import { logger } from '../../observability/logger';
 
 interface TenantProfileRecord {
   PK: string;
@@ -55,6 +56,27 @@ const DEFAULT_LIMITS = {
 const defaultCreditsForPlan = (plan: PlanDefinition): number => {
   const computed = Number(plan.maxSurveys) * Number(plan.maxResponsesPerSurvey);
   return Number.isFinite(computed) && computed > 0 ? computed : 75;
+};
+
+const buildDefaultStartPlan = (productCode: string): PlanDefinition => {
+  const now = new Date().toISOString();
+  return {
+    id: 'default-start-plan',
+    productCode: normalizeProductCode(productCode),
+    code: 'START',
+    name: 'Start',
+    description: 'Fallback automatico quando catalogo de planos nao esta disponivel.',
+    tier: 0,
+    pricePerForm: 0,
+    minForms: 1,
+    maxSurveys: DEFAULT_LIMITS.maxSurveys,
+    maxQuestionsPerSurvey: DEFAULT_LIMITS.maxQuestionsPerSurvey,
+    maxResponsesPerSurvey: DEFAULT_LIMITS.maxResponsesPerSurvey,
+    maxInterviewers: DEFAULT_LIMITS.maxInterviewers,
+    active: true,
+    createdAt: now,
+    updatedAt: now
+  };
 };
 
 export class TenantSubscriptionRepository {
@@ -153,17 +175,33 @@ export class TenantSubscriptionRepository {
   ): Promise<PlanDefinition> {
     const normalizedProduct = normalizeProductCode(productCode);
     const preferredCode = String(planCode ?? 'START').trim().toUpperCase();
-    const preferred = await this.plans.getPlanDefinitionByCode(preferredCode, normalizedProduct);
-    if (preferred) {
-      return preferred;
+    try {
+      const preferred = await this.plans.getPlanDefinitionByCode(preferredCode, normalizedProduct);
+      if (preferred) {
+        return preferred;
+      }
+
+      const fallback = await this.plans.getPlanDefinitionByCode('START', normalizedProduct);
+      if (fallback) {
+        logger.warn('tenant.subscription.plan.fallback_to_start', {
+          productCode: normalizedProduct,
+          preferredCode
+        });
+        return fallback;
+      }
+    } catch (error: unknown) {
+      logger.error('tenant.subscription.plan.lookup_failed', {
+        productCode: normalizedProduct,
+        preferredCode,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
 
-    const fallback = await this.plans.getPlanDefinitionByCode('START', normalizedProduct);
-    if (!fallback) {
-      throw new Error('START_PLAN_NOT_FOUND');
-    }
-
-    return fallback;
+    logger.warn('tenant.subscription.plan.using_default_start', {
+      productCode: normalizedProduct,
+      preferredCode
+    });
+    return buildDefaultStartPlan(normalizedProduct);
   }
 
   private resolveBalance(currentBalance: number | undefined, plan: PlanDefinition): number {
