@@ -2,6 +2,7 @@ import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dyn
 import { v4 as uuid } from 'uuid';
 import { dynamoDbDocumentClient, customersTableName, plansTableName } from './dynamo-client';
 import { DEFAULT_PRODUCT_CODE, normalizeProductCode } from '../../../shared/products';
+import { logger } from '../../observability/logger';
 
 export interface AdminTenantSummary {
   tenantId: string;
@@ -68,6 +69,61 @@ const planAuditKey = (planId: string, createdAt: string, auditId: string) => ({
   PK: `PLANDEF#${planId}`,
   SK: `AUDIT#${createdAt}#${auditId}`
 });
+
+const DEFAULT_BOOTSTRAP_PLANS = [
+  {
+    code: 'START',
+    name: 'Start',
+    description: 'Plano inicial automatico para novos clientes.',
+    tier: 0,
+    pricePerForm: 0,
+    minForms: 0,
+    maxSurveys: 5,
+    maxQuestionsPerSurvey: 5,
+    maxResponsesPerSurvey: 15,
+    maxInterviewers: 1,
+    active: true
+  },
+  {
+    code: 'PERSONAL',
+    name: 'Personal',
+    description: 'Ideal para pequenos projetos e testes de campo.',
+    tier: 1,
+    pricePerForm: 1.5,
+    minForms: 100,
+    maxSurveys: 12,
+    maxQuestionsPerSurvey: 15,
+    maxResponsesPerSurvey: 500,
+    maxInterviewers: 3,
+    active: true
+  },
+  {
+    code: 'PROFESSIONAL',
+    name: 'Professional',
+    description: 'Plano recomendado para operacoes recorrentes em crescimento.',
+    tier: 2,
+    pricePerForm: 1.2,
+    minForms: 500,
+    maxSurveys: 40,
+    maxQuestionsPerSurvey: 25,
+    maxResponsesPerSurvey: 2500,
+    maxInterviewers: 15,
+    active: true
+  },
+  {
+    code: 'PREMIUM',
+    name: 'Premium',
+    description: 'Melhor custo por formulario para alto volume.',
+    tier: 3,
+    pricePerForm: 0.99,
+    minForms: 1200,
+    maxSurveys: 200,
+    maxQuestionsPerSurvey: 40,
+    maxResponsesPerSurvey: 20000,
+    maxInterviewers: 100,
+    active: true
+  }
+] as const;
 
 export class AdminOwnerRepository {
   private normalizePlan(item: Partial<PlanDefinition>): PlanDefinition {
@@ -151,7 +207,7 @@ export class AdminOwnerRepository {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  async listPlanDefinitions(productCode: string = DEFAULT_PRODUCT_CODE): Promise<PlanDefinition[]> {
+  private async listPlanDefinitionsRaw(productCode: string = DEFAULT_PRODUCT_CODE): Promise<PlanDefinition[]> {
     const normalizedProduct = normalizeProductCode(productCode);
     const rawItems: Array<Partial<PlanDefinition>> = [];
     let lastEvaluatedKey: Record<string, unknown> | undefined;
@@ -178,6 +234,56 @@ export class AdminOwnerRepository {
     return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  async ensureDefaultPlans(productCode: string = DEFAULT_PRODUCT_CODE): Promise<PlanDefinition[]> {
+    const normalizedProduct = normalizeProductCode(productCode);
+    const existing = await this.listPlanDefinitionsRaw(normalizedProduct);
+    if (existing.length > 0) {
+      return existing;
+    }
+
+    logger.warn('plans.bootstrap.empty_catalog_detected', {
+      productCode: normalizedProduct,
+      plansToCreate: DEFAULT_BOOTSTRAP_PLANS.length
+    });
+
+    for (const plan of DEFAULT_BOOTSTRAP_PLANS) {
+      try {
+        await this.createPlanDefinition({
+          actorId: 'system-bootstrap',
+          productCode: normalizedProduct,
+          code: plan.code,
+          name: plan.name,
+          description: plan.description,
+          tier: plan.tier,
+          pricePerForm: plan.pricePerForm,
+          minForms: plan.minForms,
+          maxSurveys: plan.maxSurveys,
+          maxQuestionsPerSurvey: plan.maxQuestionsPerSurvey,
+          maxResponsesPerSurvey: plan.maxResponsesPerSurvey,
+          maxInterviewers: plan.maxInterviewers,
+          active: plan.active
+        });
+      } catch (error: unknown) {
+        logger.warn('plans.bootstrap.create_failed_or_already_exists', {
+          productCode: normalizedProduct,
+          code: plan.code,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+
+    const seeded = await this.listPlanDefinitionsRaw(normalizedProduct);
+    logger.info('plans.bootstrap.completed', {
+      productCode: normalizedProduct,
+      plansCount: seeded.length
+    });
+    return seeded;
+  }
+
+  async listPlanDefinitions(productCode: string = DEFAULT_PRODUCT_CODE): Promise<PlanDefinition[]> {
+    return this.ensureDefaultPlans(productCode);
+  }
+
   async listActivePlansForCatalog(productCode: string = DEFAULT_PRODUCT_CODE): Promise<PublicPlanCatalogItem[]> {
     const plans = await this.listPlanDefinitions(productCode);
     return plans
@@ -201,6 +307,7 @@ export class AdminOwnerRepository {
   async getPlanDefinitionByCode(code: string, productCode: string = DEFAULT_PRODUCT_CODE): Promise<PlanDefinition | null> {
     const normalizedCode = code.trim().toUpperCase();
     const normalizedProduct = normalizeProductCode(productCode);
+    await this.ensureDefaultPlans(normalizedProduct);
     const lockOutput = await dynamoDbDocumentClient.send(
       new GetCommand({
         TableName: plansTableName,
