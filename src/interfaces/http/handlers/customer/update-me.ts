@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../logged-handler';
 import { CustomerAccountRepository } from '../../../../infrastructure/persistence/dynamodb/customer-account.repository';
 import { authorize, isAuthorizationError } from '../../middleware/auth.middleware';
 import { parseBody } from '../../request';
@@ -6,7 +7,7 @@ import { fail, ok } from '../../response';
 
 const repository = new CustomerAccountRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -27,3 +28,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel atualizar perfil.');
   }
 };
+
+export const handler = withLoggedHandler('customer/update-me', rawHandler);
+
+

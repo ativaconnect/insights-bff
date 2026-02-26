@@ -1,11 +1,12 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { InterviewerRepository } from '../../../../../infrastructure/persistence/dynamodb/interviewer.repository';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { fail, ok } from '../../../response';
 
 const repository = new InterviewerRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -17,3 +18,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const interviewers = await repository.list(auth.tenantId);
   return ok(interviewers);
 };
+
+export const handler = withLoggedHandler('customer/interviewers/list-interviewers', rawHandler);
+
+

@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { CreditPurchaseRequestRepository } from '../../../../../infrastructure/persistence/dynamodb/credit-purchase-request.repository';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { fail, ok } from '../../../response';
@@ -9,7 +10,7 @@ interface RejectRequestBody {
 
 const repository = new CreditPurchaseRequestRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -37,3 +38,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel reprovar a solicitacao.');
   }
 };
+
+export const handler = withLoggedHandler('admin/credits/reject-credit-purchase-request', rawHandler);
+
+

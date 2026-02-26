@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { CreditPurchaseRequestRepository } from '../../../../../infrastructure/persistence/dynamodb/credit-purchase-request.repository';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { fail, ok } from '../../../response';
@@ -6,7 +7,7 @@ import { normalizeProductCode } from '../../../../../shared/products';
 
 const repository = new CreditPurchaseRequestRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -19,3 +20,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const items = await repository.listByTenant(auth.tenantId, productCode);
   return ok(items);
 };
+
+export const handler = withLoggedHandler('customer/subscription/list-credit-purchase-requests', rawHandler);
+
+

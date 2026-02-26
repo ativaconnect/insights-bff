@@ -1,8 +1,9 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../logged-handler';
 import { checkDynamoHealth } from '../../../../infrastructure/persistence/dynamodb/table-health';
 import { ok } from '../../response';
 
-export const handler: APIGatewayProxyHandlerV2 = async () => {
+const rawHandler: APIGatewayProxyHandlerV2 = async () => {
   const dynamo = await checkDynamoHealth();
   const healthy = dynamo.ok;
 
@@ -15,3 +16,7 @@ export const handler: APIGatewayProxyHandlerV2 = async () => {
     healthy ? 200 : 503
   );
 };
+
+export const handler = withLoggedHandler('health/get-health', rawHandler);
+
+

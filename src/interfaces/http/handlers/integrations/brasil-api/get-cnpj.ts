@@ -1,8 +1,9 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { authorizeAppToken } from '../../../middleware/app-token.middleware';
 import { fail, ok } from '../../../response';
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const appAuthError = authorizeAppToken(event);
   if (appAuthError) {
     return appAuthError;
@@ -21,3 +22,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const data = await response.json();
   return ok(data);
 };
+
+export const handler = withLoggedHandler('integrations/brasil-api/get-cnpj', rawHandler);
+
+

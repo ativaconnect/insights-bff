@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { TenantSubscriptionRepository } from '../../../../../infrastructure/persistence/dynamodb/tenant-subscription.repository';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { parseBody } from '../../../request';
@@ -13,7 +14,7 @@ interface PurchaseCreditsRequest {
 
 const repository = new TenantSubscriptionRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -52,3 +53,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel concluir a compra de creditos.');
   }
 };
+
+export const handler = withLoggedHandler('admin/customers/purchase-customer-credits', rawHandler);
+
+

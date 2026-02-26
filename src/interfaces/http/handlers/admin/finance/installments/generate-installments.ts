@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../../logged-handler';
 import {
   FinancialControlRepository,
   type FinancialExpenseType,
@@ -24,7 +25,7 @@ interface GenerateInstallmentsBody {
   notes?: string;
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) return auth;
 
@@ -62,4 +63,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Corpo da requisicao invalido.');
   }
 };
+
+export const handler = withLoggedHandler('admin/finance/installments/generate-installments', rawHandler);
+
 

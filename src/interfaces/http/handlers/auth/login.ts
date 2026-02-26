@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { withLoggedHandler } from '../../logged-handler';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { CustomerAccountRepository } from '../../../../infrastructure/persistence/dynamodb/customer-account.repository';
 import { InterviewerRepository } from '../../../../infrastructure/persistence/dynamodb/interviewer.repository';
@@ -18,7 +19,7 @@ const loginGuard = new LoginGuardService();
 const captchaVerifier = new CaptchaVerifierService();
 const jwtSecret = assertConfiguredSecret('JWT_SECRET', process.env.JWT_SECRET, process.env.APP_STAGE);
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const appAuthError = authorizeAppToken(event);
   if (appAuthError) {
     return appAuthError;
@@ -151,3 +152,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel efetuar login.');
   }
 };
+
+export const handler = withLoggedHandler('auth/login', rawHandler);
+
+

@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { CustomerAccountRepository } from '../../../../../infrastructure/persistence/dynamodb/customer-account.repository';
 import { CreditPurchaseRequestRepository } from '../../../../../infrastructure/persistence/dynamodb/credit-purchase-request.repository';
 import { PaymentGatewayConfigRepository } from '../../../../../infrastructure/persistence/dynamodb/payment-gateway-config.repository';
@@ -18,7 +19,7 @@ const profileRepository = new CustomerAccountRepository();
 const paymentGateway = new PaymentGatewayService();
 const paymentConfigRepository = new PaymentGatewayConfigRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -109,3 +110,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel solicitar compra de creditos.');
   }
 };
+
+export const handler = withLoggedHandler('customer/subscription/request-credit-purchase', rawHandler);
+
+

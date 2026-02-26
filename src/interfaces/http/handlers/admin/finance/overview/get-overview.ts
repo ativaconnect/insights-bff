@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../../logged-handler';
 import {
   FinancialControlRepository,
   type FinancialExpense
@@ -18,7 +19,7 @@ const inPeriod = (occurredOn: string, fromDate?: string, toDate?: string): boole
 const sum = (items: FinancialExpense[]): number =>
   Number(items.reduce((acc, item) => acc + Number(item.amount ?? 0), 0).toFixed(2));
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -114,4 +115,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     projectedResult
   });
 };
+
+export const handler = withLoggedHandler('admin/finance/overview/get-overview', rawHandler);
+
 

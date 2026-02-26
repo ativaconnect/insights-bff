@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { PaymentGatewayConfigRepository } from '../../../../../infrastructure/persistence/dynamodb/payment-gateway-config.repository';
 import { normalizeProductCode } from '../../../../../shared/products';
 import {
@@ -24,7 +25,7 @@ interface UpsertPaymentConfigBody {
 
 const repository = new PaymentGatewayConfigRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -57,4 +58,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel salvar configuracao de pagamentos.');
   }
 };
+
+export const handler = withLoggedHandler('admin/payments/upsert-config', rawHandler);
+
 

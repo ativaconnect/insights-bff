@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../logged-handler';
 
 const resolveSpecUrl = (event: Parameters<APIGatewayProxyHandlerV2>[0]): string => {
   const forwardedPrefix = event.headers?.['x-forwarded-prefix'] ?? event.headers?.['X-Forwarded-Prefix'];
@@ -39,7 +40,7 @@ const buildHtml = (specUrl: string): string => `<!doctype html>
   </body>
 </html>`;
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => ({
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => ({
   statusCode: 200,
   headers: {
     'content-type': 'text/html; charset=utf-8',
@@ -47,3 +48,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => ({
   },
   body: buildHtml(resolveSpecUrl(event))
 });
+
+export const handler = withLoggedHandler('docs/get-swagger-ui', rawHandler);
+
+

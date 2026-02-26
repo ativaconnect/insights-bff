@@ -1,11 +1,12 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../../logged-handler';
 import { FinancialControlRepository } from '../../../../../../infrastructure/persistence/dynamodb/financial-control.repository';
 import { authorize, isAuthorizationError } from '../../../../middleware/auth.middleware';
 import { ok } from '../../../../response';
 
 const repository = new FinancialControlRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -14,4 +15,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const items = await repository.listSuppliers();
   return ok(items);
 };
+
+export const handler = withLoggedHandler('admin/finance/suppliers/list-suppliers', rawHandler);
+
 

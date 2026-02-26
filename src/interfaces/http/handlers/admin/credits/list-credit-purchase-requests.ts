@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import {
   CreditPurchaseRequestRepository,
   type CreditPurchaseRequestStatus
@@ -9,7 +10,7 @@ import { normalizeProductCode } from '../../../../../shared/products';
 
 const repository = new CreditPurchaseRequestRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -28,3 +29,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const requests = await repository.listForAdmin(status, productCode);
   return ok(requests);
 };
+
+export const handler = withLoggedHandler('admin/credits/list-credit-purchase-requests', rawHandler);
+
+

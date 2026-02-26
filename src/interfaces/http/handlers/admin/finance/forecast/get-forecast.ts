@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../../logged-handler';
 import { FinancialControlRepository } from '../../../../../../infrastructure/persistence/dynamodb/financial-control.repository';
 import { authorize, isAuthorizationError } from '../../../../middleware/auth.middleware';
 import { fail, ok } from '../../../../response';
@@ -15,7 +16,7 @@ const emptyForecast = (month: string) => ({
   updatedBy: ''
 });
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -29,4 +30,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const forecast = await repository.getForecastMonth(month);
   return ok(forecast ?? emptyForecast(month));
 };
+
+export const handler = withLoggedHandler('admin/finance/forecast/get-forecast', rawHandler);
+
 

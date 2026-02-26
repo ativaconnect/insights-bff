@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../logged-handler';
 import { buildOpenApiSpec } from '../../docs/openapi-spec';
 import { ok } from '../../response';
 
@@ -20,7 +21,11 @@ const resolveServerUrl = (event: Parameters<APIGatewayProxyHandlerV2>[0]): strin
   return `${protocol}://${host}${stagePath}`;
 };
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const serverUrl = resolveServerUrl(event);
   return ok(buildOpenApiSpec(serverUrl));
 };
+
+export const handler = withLoggedHandler('docs/get-openapi', rawHandler);
+
+

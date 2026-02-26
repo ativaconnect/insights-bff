@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { AdminOwnerRepository } from '../../../../../infrastructure/persistence/dynamodb/admin-owner.repository';
 import { parseBody } from '../../../request';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
@@ -19,7 +20,7 @@ interface UpdatePlanRequest {
 
 const repository = new AdminOwnerRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -91,3 +92,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel atualizar o plano.');
   }
 };
+
+export const handler = withLoggedHandler('admin/plans/update-plan-definition', rawHandler);
+
+

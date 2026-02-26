@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import {
   normalizeOwnerAdminPermissions,
   type OwnerAdminAccessLevel
@@ -19,7 +20,7 @@ interface CreateUserRequest {
 
 const repository = new OwnerAdminUserRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -56,4 +57,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel criar usuario.');
   }
 };
+
+export const handler = withLoggedHandler('admin/users/create-user', rawHandler);
+
 

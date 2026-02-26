@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { CreditPurchaseRequestRepository } from '../../../../../infrastructure/persistence/dynamodb/credit-purchase-request.repository';
 import { PaymentGatewayService } from '../../../../../infrastructure/payments/payment-gateway.service';
 import { fail, ok } from '../../../response';
@@ -6,7 +7,7 @@ import { fail, ok } from '../../../response';
 const paymentGateway = new PaymentGatewayService();
 const requestRepository = new CreditPurchaseRequestRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const provider = event.pathParameters?.provider;
   if (!provider) {
     return fail(400, 'provider obrigatorio.');
@@ -51,4 +52,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel processar webhook.');
   }
 };
+
+export const handler = withLoggedHandler('webhooks/payments/receive-provider-callback', rawHandler);
+
 

@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { InterviewerRepository } from '../../../../../infrastructure/persistence/dynamodb/interviewer.repository';
 import {
   UpdateInterviewerRequestSchema,
@@ -10,7 +11,7 @@ import { fail, ok } from '../../../response';
 
 const repository = new InterviewerRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -44,3 +45,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel atualizar entrevistador.');
   }
 };
+
+export const handler = withLoggedHandler('customer/interviewers/update-interviewer', rawHandler);
+
+

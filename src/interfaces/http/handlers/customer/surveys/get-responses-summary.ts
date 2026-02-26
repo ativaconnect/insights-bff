@@ -1,11 +1,12 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { SurveyAnalyticsSnapshotService } from '../../../../../infrastructure/analytics/survey-analytics-snapshot.service';
 import { authorize, isAuthorizationError } from '../../../middleware/auth.middleware';
 import { fail, ok } from '../../../response';
 
 const analytics = new SurveyAnalyticsSnapshotService();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_CUSTOMER');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -31,3 +32,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     generatedAt: snapshot.generatedAt
   });
 };
+
+export const handler = withLoggedHandler('customer/surveys/get-responses-summary', rawHandler);
+
+

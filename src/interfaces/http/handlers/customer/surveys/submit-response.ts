@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import {
   CustomerSurveyRepository,
   SurveySubmissionError
@@ -15,7 +16,7 @@ import { fail, ok } from '../../../response';
 const repository = new CustomerSurveyRepository();
 const subscriptionRepository = new TenantSubscriptionRepository();
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, ['ROLE_CUSTOMER', 'ROLE_INTERVIEWER']);
   if (isAuthorizationError(auth)) {
     return auth;
@@ -70,3 +71,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Nao foi possivel registrar resposta.');
   }
 };
+
+export const handler = withLoggedHandler('customer/surveys/submit-response', rawHandler);
+
+

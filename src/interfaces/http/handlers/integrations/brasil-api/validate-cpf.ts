@@ -1,9 +1,10 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { isValidCpf } from '../../../../../core/domain/services/document-validator';
 import { authorizeAppToken } from '../../../middleware/app-token.middleware';
 import { fail, ok } from '../../../response';
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const appAuthError = authorizeAppToken(event);
   if (appAuthError) {
     return appAuthError;
@@ -19,3 +20,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     valid: isValidCpf(cpf)
   });
 };
+
+export const handler = withLoggedHandler('integrations/brasil-api/validate-cpf', rawHandler);
+
+

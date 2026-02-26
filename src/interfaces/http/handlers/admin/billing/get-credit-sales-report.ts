@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../logged-handler';
 import { AdminOwnerRepository } from '../../../../../infrastructure/persistence/dynamodb/admin-owner.repository';
 import {
   CreditPurchaseRequestRepository,
@@ -33,7 +34,7 @@ const inPeriod = (requestedAt: string, fromDate: string | null, toDate: string |
   return true;
 };
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -163,3 +164,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     items
   });
 };
+
+export const handler = withLoggedHandler('admin/billing/get-credit-sales-report', rawHandler);
+
+

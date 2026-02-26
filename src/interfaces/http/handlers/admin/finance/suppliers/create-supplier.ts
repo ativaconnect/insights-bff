@@ -1,4 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { withLoggedHandler } from '../../../../logged-handler';
 import { FinancialControlRepository } from '../../../../../../infrastructure/persistence/dynamodb/financial-control.repository';
 import { parseBody } from '../../../../request';
 import { authorize, isAuthorizationError } from '../../../../middleware/auth.middleware';
@@ -16,7 +17,7 @@ interface CreateSupplierBody {
   notes?: string;
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   const auth = authorize(event, 'ROLE_ADMIN');
   if (isAuthorizationError(auth)) {
     return auth;
@@ -34,4 +35,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     return fail(400, 'Corpo da requisicao invalido.');
   }
 };
+
+export const handler = withLoggedHandler('admin/finance/suppliers/create-supplier', rawHandler);
+
 
