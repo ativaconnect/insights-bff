@@ -16,9 +16,19 @@ const rawHandler: APIGatewayProxyHandlerV2 = async (event) => {
   }
 
   const interviewers = await repository.list(auth.tenantId);
-  return ok(interviewers);
+  const enriched = await Promise.all(
+    interviewers.map(async (interviewer) => {
+      const usage = await repository.getUsage(auth.tenantId as string, interviewer.id);
+      return {
+        ...interviewer,
+        hasLinks: usage.assignedSurveyCount > 0 || usage.responseCount > 0,
+        linkedSurveyCount: usage.assignedSurveyCount,
+        linkedResponseCount: usage.responseCount
+      };
+    })
+  );
+
+  return ok(enriched);
 };
 
 export const handler = withLoggedHandler('customer/interviewers/list-interviewers', rawHandler);
-
-
